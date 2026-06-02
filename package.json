@@ -1,0 +1,43 @@
+{
+  "name": "@pi-squad/coordinator",
+  "version": "0.1.0",
+  "description": "Multi-team coordinator for Pi agents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "dev": "tsc --watch"
+  },
+  "squad": {
+    "version": "0.9.4",
+    "commit": "",
+    "minVersion": "0.9.0",
+    "maxVersion": "0.10.x"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@types/pg": "^8.20.0",
+    "@xenova/transformers": "^2.17.2",
+    "better-sqlite3": "^12.10.0",
+    "pg": "^8.21.0",
+    "semver": "^7.6.0",
+    "sqlite-vec": "^0.1.9"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/semver": "^7.7.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.8"
+  }
+}

@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

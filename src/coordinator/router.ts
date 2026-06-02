@@ -156,8 +156,8 @@ function escapeRegExp(value: string): string {
 
 function globToRegExp(pattern: string): RegExp {
   const escaped = escapeRegExp(pattern)
-    .replace(/\\\*\\\*/gu, ".*")
-    .replace(/\\\*/gu, "[^/]*");
+    .replace(/\*\*/gu, ".*")
+    .replace(/\*/gu, "[^/]*");
 
   return new RegExp(`^${escaped}$`, "i");
 }

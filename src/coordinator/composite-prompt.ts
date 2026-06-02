@@ -153,6 +153,30 @@ function formatSection(title: string, content: string | null): string | null {
   return `## ${title}\n${content}`;
 }
 
+function formatLegacySection(title: string, content: string | null): string | null {
+  if (!content) {
+    return null;
+  }
+
+  return `---\n## ${title}\n${content}`;
+}
+
+function assembleSingleTeamPrompt(
+  agentMd: string,
+  rootTeam: string | null,
+  rootRouting: string | null,
+  rootDecisions: string | null,
+): string {
+  return [
+    normalizeContent(agentMd),
+    formatLegacySection("Current Team", rootTeam),
+    formatLegacySection("Routing Rules", rootRouting),
+    formatLegacySection("Recent Decisions", rootDecisions),
+  ]
+    .filter((section): section is string => section !== null)
+    .join("\n\n");
+}
+
 function assemblePrompt(stack: TeamStack, sections: readonly PromptSection[]): string {
   const governance = getSectionContent(sections, "governance");
   const identity = getSectionContent(sections, "agent.identity");
@@ -317,14 +341,42 @@ export async function getCompositeSystemPrompt(
         : readOptionalFile(join(stack.local.squadPath, DECISIONS_FILENAME)),
     ]);
 
+  const normalizedRootTeam = normalizeContent(rootTeam);
+  const normalizedRootRouting = normalizeContent(rootRouting);
+  const normalizedRootDecisions = normalizeContent(rootDecisions);
+
+  if (stack.isSingleTeam) {
+    const missingSections: PromptSectionKey[] = [];
+    if (!normalizeContent(agentMd)) {
+      missingSections.push("governance");
+    }
+    if (!normalizedRootTeam) {
+      missingSections.push("root.team");
+    }
+    if (missingSections.length > 0) {
+      throw new CompositePromptError(missingSections);
+    }
+
+    const prompt = assembleSingleTeamPrompt(
+      agentMd,
+      normalizedRootTeam,
+      normalizedRootRouting,
+      normalizedRootDecisions,
+    );
+    if (prompt.length === 0) {
+      throw new CompositePromptError(REQUIRED_SECTIONS.slice(), "Composite prompt assembled to an empty string.");
+    }
+    return prompt;
+  }
+
   const sections = buildSections(
     stack,
     splitAgentMd(agentMd),
-    normalizeContent(rootTeam),
+    normalizedRootTeam,
     normalizeContent(localTeam),
-    normalizeContent(rootRouting),
+    normalizedRootRouting,
     normalizeContent(localRouting),
-    normalizeContent(rootDecisions),
+    normalizedRootDecisions,
     normalizeContent(localDecisions),
   );
 

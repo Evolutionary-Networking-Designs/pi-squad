@@ -38,7 +38,9 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 vi.mock("better-sqlite3", () => ({
-  default: vi.fn(() => mockState.fakeDb),
+  default: vi.fn(function MockDatabase() {
+    return mockState.fakeDb;
+  }),
 }));
 
 vi.mock("sqlite-vec", () => ({
@@ -51,7 +53,9 @@ vi.mock("@xenova/transformers", () => ({
 }));
 
 vi.mock("../../src/context/backends/sqlite-vec.js", () => ({
-  SqliteVecBackend: vi.fn(() => mockState.vectorBackend),
+  SqliteVecBackend: vi.fn(function MockSqliteVecBackend() {
+    return mockState.vectorBackend;
+  }),
 }));
 
 import Database from "better-sqlite3";
@@ -178,5 +182,6 @@ describe("context store", () => {
 
     expect(readFileMock).toHaveBeenCalledWith("/repo/.squad/checkpoints/latest.json", "utf8");
     expect(bootstrapSpy).toHaveBeenCalledWith(checkpoint);
+    bootstrapSpy.mockRestore();
   });
 });

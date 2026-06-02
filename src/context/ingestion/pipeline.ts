@@ -4,7 +4,7 @@
  *
  * The pipeline is dependency-injected:
  *   - `backend`: VectorBackend (sqlite-vec or pgvector)
- *   - `embedFn`: async text → Float32Array(384) (from @xenova/transformers)
+ *   - `embedFn`: async text → Float32Array(384) (from @huggingface/transformers)
  *
  * Sanitization is a HARD GATE: no raw content may be embedded without passing
  * through the sanitizer. The sourceType parameter controls sanitization intensity

@@ -3,7 +3,7 @@
  * SQLite-backed session store for token analytics, checkpoints, and semantic recovery.
  *
  * Uses better-sqlite3 for synchronous local persistence and sqlite-vec for vector
- * search via the VectorBackend abstraction. Embeddings use @xenova/transformers
+ * search via the VectorBackend abstraction. Embeddings use @huggingface/transformers
  * (Xenova/all-MiniLM-L6-v2, 384-dim) for semantic similarity. The pipeline is
  * lazy-initialized on first use and cached.
  *
@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
-import { pipeline, env } from "@xenova/transformers";
+import { pipeline, env } from "@huggingface/transformers";
 
 import {
   ContextPressureLevel,

@@ -47,7 +47,7 @@ vi.mock("sqlite-vec", () => ({
   getLoadablePath: vi.fn(() => "/mock/sqlite-vec"),
 }));
 
-vi.mock("@xenova/transformers", () => ({
+vi.mock("@huggingface/transformers", () => ({
   pipeline: vi.fn(),
   env: {},
 }));

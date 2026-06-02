@@ -32,7 +32,7 @@ The embedding pipeline, ingestion pipeline, chunker, and knowledge-dir logic are
 
 ## What Stays the Same
 
-- Embedding pipeline: `@xenova/transformers`, `Xenova/all-MiniLM-L6-v2`, 384-dim
+- Embedding pipeline: `@huggingface/transformers`, `Xenova/all-MiniLM-L6-v2`, 384-dim
 - Float32Array(384) interface contract — never changes across backends
 - Ingestion pipeline: `convertDocument → chunkMarkdown → embed → saveEmbedding`
 - Knowledge dir convention: `.squad/knowledge/`

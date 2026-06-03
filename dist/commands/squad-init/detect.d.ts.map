@@ -1,0 +1,1 @@
+{"version":3,"file":"detect.d.ts","sourceRoot":"","sources":["../../../src/commands/squad-init/detect.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,kCAAkC,CAAC;AAEpE,wBAAsB,WAAW,CAAC,SAAS,EAAE,MAAM,GAAG,OAAO,CAAC,OAAO,CAAC,CAOrE;AAED,eAAO,MAAM,qBAAqB,iKAMxB,CAAC;AAEX,wBAAsB,iBAAiB,CAAC,GAAG,EAAE,MAAM,GAAG,OAAO,CAAC,WAAW,CAAC,CAuBzE"}

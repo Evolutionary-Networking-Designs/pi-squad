@@ -1,18 +1,21 @@
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { access, mkdir, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
 
-import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
-const SQUAD_DIR = '.squad';
+import type { Coordinator } from "../coordinator/coordinator.js";
+import { detectEnvironment } from "./squad-init/detect.js";
+
+const SQUAD_DIR = ".squad";
 const DIRECTORIES = [
-  '.squad/decisions/inbox',
-  '.squad/decisions/processed',
-  '.squad/agents',
-  '.squad/orchestration-log',
-  '.squad/log',
-  '.squad/casting',
-  '.squad/skills',
-  '.squad/identity',
+  ".squad/decisions/inbox",
+  ".squad/decisions/processed",
+  ".squad/agents",
+  ".squad/orchestration-log",
+  ".squad/log",
+  ".squad/casting",
+  ".squad/skills",
+  ".squad/identity",
 ] as const;
 
 const TEAM_SEED = `# Squad Team
@@ -74,14 +77,14 @@ How to decide who handles what.
 10. Ralph monitors work health automatically.
 `;
 
-const DECISIONS_SEED = '# Decisions\n';
-const CEREMONIES_SEED = '# Ceremonies\n';
+const DECISIONS_SEED = "# Decisions\n";
+const CEREMONIES_SEED = "# Ceremonies\n";
 
 const SEED_FILES = [
-  { path: '.squad/team.md', content: TEAM_SEED },
-  { path: '.squad/routing.md', content: ROUTING_SEED },
-  { path: '.squad/decisions.md', content: DECISIONS_SEED },
-  { path: '.squad/ceremonies.md', content: CEREMONIES_SEED },
+  { path: ".squad/team.md", content: TEAM_SEED },
+  { path: ".squad/routing.md", content: ROUTING_SEED },
+  { path: ".squad/decisions.md", content: DECISIONS_SEED },
+  { path: ".squad/ceremonies.md", content: CEREMONIES_SEED },
 ] as const;
 
 export type SquadInitResult =
@@ -190,12 +193,27 @@ export async function initializeSquadProject(projectRoot: string): Promise<Squad
   };
 }
 
-export function registerSquadInitCommand(pi: ExtensionAPI): void {
-  pi.registerCommand('squad-init', {
-    description: 'Initialize .squad scaffolding for this project',
+export function registerSquadInitCommand(pi: ExtensionAPI, coordinator?: Coordinator): void {
+  pi.registerCommand("squad-init", {
+    description: "Initialize .squad scaffolding for this project",
     handler: async (_args, ctx) => {
-      const result = await initializeSquadProject(ctx.cwd);
-      emitMessage(ctx, formatMessage(result));
+      const teamPath = join(ctx.cwd, ".squad", "team.md");
+      if (await pathExists(teamPath)) {
+        coordinator?.clearInitMode();
+        emitMessage(ctx, "Squad is already initialized in this project. Use `/squad` to start.");
+        return;
+      }
+
+      const { userName, projectName, detectedExtensions } = await detectEnvironment(ctx.cwd);
+      coordinator?.setInitMode({ userName, projectName, detectedExtensions });
+
+      const greeting = userName ? `Hey ${userName}` : "Hey";
+      const message =
+        `${greeting} — starting Squad setup. I'll ask a few questions to build your team.\n` +
+        "Initialized Squad for this project.\n" +
+        "Type anything to begin, or use /squad to skip setup and scaffold a default team directly.\n" +
+        "Use `/squad` to start the coordinator.";
+      emitMessage(ctx, message);
     },
   });
 }

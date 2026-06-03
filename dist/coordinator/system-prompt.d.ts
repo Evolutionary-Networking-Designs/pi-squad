@@ -13,5 +13,5 @@ export declare function loadCoordinatorPrompt(coordinator: Coordinator): Promise
  * Prepends the coordinator prompt to any existing system prompt.
  * Returns the coordinator prompt alone if no existing prompt is provided.
  */
-export declare function buildSystemPrompt(existingPrompt: string | undefined, coordinatorPrompt: string): string;
+export declare function buildSystemPrompt(existingPrompt: string | undefined, coordinatorPrompt: string, coordinator: Coordinator): Promise<string>;
 //# sourceMappingURL=system-prompt.d.ts.map

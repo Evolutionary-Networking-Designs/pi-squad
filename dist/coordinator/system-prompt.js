@@ -148,10 +148,24 @@ export async function loadCoordinatorPrompt(coordinator) {
  * Prepends the coordinator prompt to any existing system prompt.
  * Returns the coordinator prompt alone if no existing prompt is provided.
  */
-export function buildSystemPrompt(existingPrompt, coordinatorPrompt) {
-    if (!existingPrompt) {
-        return coordinatorPrompt;
+export async function buildSystemPrompt(existingPrompt, coordinatorPrompt, coordinator) {
+    const prompt = !existingPrompt
+        ? coordinatorPrompt
+        : `${coordinatorPrompt}${SECTION_SEPARATOR}${existingPrompt}`;
+    if (!coordinator.isInitMode()) {
+        return prompt;
     }
-    return `${coordinatorPrompt}${SECTION_SEPARATOR}${existingPrompt}`;
+    const initCtx = coordinator.getInitContext();
+    const skillPath = new URL("../../../../squad/.copilot/skills/init-mode/SKILL.md", import.meta.url);
+    const initSkill = await readFile(skillPath, "utf8").catch(() => "");
+    const contextBlock = [
+        "## Init Context",
+        `User: ${initCtx?.userName ?? "unknown"}`,
+        `Project: ${initCtx?.projectName ?? "unknown"}`,
+        initCtx?.detectedExtensions.length
+            ? `Installed Pi extensions: ${initCtx.detectedExtensions.join(", ")}`
+            : "No rpiv extensions detected — built-in ask_user_question is active.",
+    ].join("\n");
+    return [initSkill.trim(), contextBlock, prompt].filter((section) => section.length > 0).join("\n\n");
 }
 //# sourceMappingURL=system-prompt.js.map

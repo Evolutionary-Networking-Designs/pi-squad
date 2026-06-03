@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { ContextPressureLevel } from "../context/types.js";
 import { checkCompatibility } from "../upstream/version.js";
 import { getCompositeSystemPrompt } from "./composite-prompt.js";
-import { MAX_PROMPT_CHARS, getSystemPrompt } from "./system-prompt.js";
+import { MAX_PROMPT_CHARS, getSystemPrompt as loadSystemPrompt } from "./system-prompt.js";
 import { resolveTeamStack } from "./team-stack.js";
 const SQUAD_AGENT_MD = fileURLToPath(new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url));
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
@@ -123,6 +123,7 @@ class CoordinatorImpl {
     recoveryRuntimePromise = null;
     warnedFeatures = new Set();
     turnIndex = 0;
+    initContext = null;
     constructor(_pi) {
         this._pi = _pi;
     }
@@ -136,16 +137,19 @@ class CoordinatorImpl {
         return this._teamStack;
     }
     async getSystemPrompt() {
+        if (this.isInitMode()) {
+            return loadSystemPrompt(process.cwd());
+        }
         const stack = await this.getTeamStack();
         if (stack.isSingleTeam) {
-            return getSystemPrompt(stack.root.path);
+            return loadSystemPrompt(stack.root.path);
         }
         try {
             return await getCompositeSystemPrompt(stack, await readAgentPrompt(), MAX_PROMPT_CHARS);
         }
         catch (error) {
             this.warnOnce("composite-prompt", `[pi-squad] Failed to assemble composite coordinator prompt; falling back to root prompt. ${String(error)}`);
-            return getSystemPrompt(stack.root.path);
+            return loadSystemPrompt(stack.root.path);
         }
     }
     async assessContext(content, history = []) {
@@ -163,6 +167,18 @@ class CoordinatorImpl {
         }
         this.turnIndex += 1;
         return assessment;
+    }
+    setInitMode(ctx) {
+        this.initContext = ctx;
+    }
+    clearInitMode() {
+        this.initContext = null;
+    }
+    isInitMode() {
+        return this.initContext !== null;
+    }
+    getInitContext() {
+        return this.initContext;
     }
     async route(message, _ctx) {
         const stack = await this.getTeamStack();

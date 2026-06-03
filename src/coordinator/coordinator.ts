@@ -14,7 +14,7 @@ import type { ContextAssessment } from "../context/monitor.js";
 import type { TeamStack } from "../types.js";
 import { checkCompatibility } from "../upstream/version.js";
 import { getCompositeSystemPrompt } from "./composite-prompt.js";
-import { MAX_PROMPT_CHARS, getSystemPrompt } from "./system-prompt.js";
+import { MAX_PROMPT_CHARS, getSystemPrompt as loadSystemPrompt } from "./system-prompt.js";
 import { resolveTeamStack } from "./team-stack.js";
 
 const SQUAD_AGENT_MD = fileURLToPath(
@@ -93,12 +93,22 @@ class FallbackContextMonitor {
 
 // ─── Public Interface ─────────────────────────────────────────────────────────
 
+export interface InitContext {
+  readonly userName: string | null;
+  readonly detectedExtensions: readonly string[];
+  readonly projectName: string;
+}
+
 export interface Coordinator {
   route(message: string, ctx: unknown): Promise<void>;
   getSystemPrompt(): Promise<string>;
   getTeamRoot(): Promise<string>;
   getTeamStack(): Promise<TeamStack>;
   assessContext(content: string, history?: readonly string[]): Promise<ContextAssessment>;
+  setInitMode(ctx: InitContext): void;
+  clearInitMode(): void;
+  isInitMode(): boolean;
+  getInitContext(): InitContext | null;
 }
 
 interface PackageSquadMeta {
@@ -182,6 +192,7 @@ class CoordinatorImpl implements Coordinator {
   private recoveryRuntimePromise: Promise<RecoveryRuntime> | null = null;
   private readonly warnedFeatures = new Set<string>();
   private turnIndex = 0;
+  private initContext: InitContext | null = null;
 
   constructor(private readonly _pi: ExtensionAPI) {}
 
@@ -197,10 +208,14 @@ class CoordinatorImpl implements Coordinator {
   }
 
   async getSystemPrompt(): Promise<string> {
+    if (this.isInitMode()) {
+      return loadSystemPrompt(process.cwd());
+    }
+
     const stack = await this.getTeamStack();
 
     if (stack.isSingleTeam) {
-      return getSystemPrompt(stack.root.path);
+      return loadSystemPrompt(stack.root.path);
     }
 
     try {
@@ -212,7 +227,7 @@ class CoordinatorImpl implements Coordinator {
           error,
         )}`,
       );
-      return getSystemPrompt(stack.root.path);
+      return loadSystemPrompt(stack.root.path);
     }
   }
 
@@ -238,6 +253,22 @@ class CoordinatorImpl implements Coordinator {
 
     this.turnIndex += 1;
     return assessment;
+  }
+
+  setInitMode(ctx: InitContext): void {
+    this.initContext = ctx;
+  }
+
+  clearInitMode(): void {
+    this.initContext = null;
+  }
+
+  isInitMode(): boolean {
+    return this.initContext !== null;
+  }
+
+  getInitContext(): InitContext | null {
+    return this.initContext;
   }
 
   async route(message: string, _ctx: unknown): Promise<void> {

@@ -1,12 +1,30 @@
 /**
- * Adapted from rpiv-ask-user-question
- * https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-ask-user-question
- * © Sergii Guslystyi — MIT License
+ * MIT License
  *
- * Vendored subset: QuestionParams type, QuestionAnswer, QuestionnaireResult,
- * QuestionnaireError, and related constants.
- * TUI: simplified implementation. Install @juicesharp/rpiv-ask-user-question
- * for the full tabbed UI with previews and localization.
+ * Copyright (c) 2026 juicesharp
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Source: https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-ask-user-question
+ * Adapted for @pi-squad/coordinator built-in ask_user_question fallback.
+ * Vendored subset: QuestionParams, QuestionAnswer, QuestionnaireResult, and related constants.
+ * Install @juicesharp/rpiv-ask-user-question for the full TUI with previews and localization.
  */
 export declare const MAX_QUESTIONS = 4;
 export declare const MIN_OPTIONS = 2;

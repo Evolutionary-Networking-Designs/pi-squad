@@ -97,9 +97,11 @@ describe('squad-init command', () => {
     await expect(readFile(join(workspaceRoot, '.squad/decisions.md'), 'utf8')).resolves.toBe(
       '# Decisions\n',
     );
-    await expect(readFile(join(workspaceRoot, '.squad/ceremonies.md'), 'utf8')).resolves.toBe(
-      '# Ceremonies\n',
-    );
+
+    const ceremonies = await readFile(join(workspaceRoot, '.squad/ceremonies.md'), 'utf8');
+    expect(ceremonies).toContain('# Ceremonies');
+    expect(ceremonies).toContain('## Design Review');
+    expect(ceremonies).toContain('## Retrospective');
   });
 
   it('guards against re-initialization when team.md already exists', async () => {

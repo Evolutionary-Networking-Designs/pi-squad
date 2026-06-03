@@ -47,8 +47,11 @@ const RE_SK_KEY = /sk-[A-Za-z0-9]{20,}/g;
 const RE_GHP_KEY = /ghp_[A-Za-z0-9]{36}/g;
 /** PEM-encoded private key blocks */
 const RE_PEM_KEY = /-----BEGIN[\s\S]*?-----/g;
-/** Long base64 strings that look like encoded secrets (40+ chars ending in =) */
-const RE_BASE64_KEY = /[A-Za-z0-9+/]{40,}={1,2}/g;
+/**
+ * Base64-like blobs that look like encoded secrets.
+ * Bound the run length to avoid catastrophic backtracking on very large plain-text spans.
+ */
+const RE_BASE64_KEY = /(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{40,4096}={1,2}(?![A-Za-z0-9+/])/g;
 
 // ─── Prompt Injection Patterns ────────────────────────────────────────────────
 

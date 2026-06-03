@@ -21,11 +21,15 @@ import {
   type RouteDispatchResult,
   type UnknownDirective,
 } from "./router.js";
-import { MAX_PROMPT_CHARS, getSystemPrompt as loadSystemPrompt } from "./system-prompt.js";
+import {
+  MAX_PROMPT_CHARS,
+  SquadMissingError,
+  getSystemPrompt as loadSystemPrompt,
+} from "./system-prompt.js";
 import { resolveTeamStack } from "./team-stack.js";
 
 const SQUAD_AGENT_MD = fileURLToPath(
-  new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
+  new URL("../../squad/.github/agents/squad.agent.md", import.meta.url),
 );
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
 const CHARS_PER_TOKEN = 4;
@@ -144,7 +148,7 @@ async function readSquadMeta(): Promise<PackageSquadMeta | null> {
 }
 
 async function readSquadVersion(teamRoot: string): Promise<string | null> {
-  const versionPath = resolve(new URL("../../../../squad/VERSION", import.meta.url).pathname);
+  const versionPath = resolve(new URL("../../squad/VERSION", import.meta.url).pathname);
   const fromVendored = await readFileSafe(versionPath);
   if (fromVendored) {
     return fromVendored.trim();
@@ -296,7 +300,19 @@ class CoordinatorImpl implements Coordinator {
       return loadSystemPrompt(process.cwd());
     }
 
-    const stack = await this.getTeamStack();
+    let stack: TeamStack;
+    try {
+      stack = await this.getTeamStack();
+    } catch (error) {
+      if (error instanceof SquadMissingError) {
+        this.warnOnce(
+          "missing-team-stack",
+          `[pi-squad] No .squad/team.md found; using minimal coordinator prompt. ${String(error)}`,
+        );
+        return loadSystemPrompt(process.cwd());
+      }
+      throw error;
+    }
 
     if (stack.isSingleTeam) {
       return loadSystemPrompt(stack.root.path);

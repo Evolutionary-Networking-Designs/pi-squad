@@ -13,8 +13,8 @@ import { sanitize } from "../context/ingestion/sanitizer.js";
 const SQUAD_AGENT_MD = fileURLToPath(
   new URL("../../squad/.github/agents/squad.agent.md", import.meta.url),
 );
-const SQUAD_VERSION_FILE = fileURLToPath(
-  new URL("../../squad/VERSION", import.meta.url),
+const SQUAD_PACKAGE_JSON = fileURLToPath(
+  new URL("../../squad/package.json", import.meta.url),
 );
 const TEAM_MD_FILENAME = "team.md";
 const ROUTING_MD_FILENAME = "routing.md";
@@ -189,12 +189,17 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
   const routingPath = join(teamRoot, ".squad", ROUTING_MD_FILENAME);
   const decisionsPath = join(teamRoot, ".squad", DECISIONS_MD_FILENAME);
 
-  const squadVersionPromise = readFile(SQUAD_VERSION_FILE, "utf8").catch(() => {
-    console.warn(
-      "[pi-squad] Could not read squad/VERSION — version display may show placeholder",
-    );
-    return null;
-  });
+  const squadVersionPromise = readFile(SQUAD_PACKAGE_JSON, "utf8")
+    .then((raw) => {
+      const pkg = JSON.parse(raw) as { version?: string };
+      return pkg.version?.trim() ?? null;
+    })
+    .catch(() => {
+      console.warn(
+        "[pi-squad] Could not read squad/package.json — version display may show placeholder",
+      );
+      return null;
+    });
 
   const [squadAgent, squadVersion, team, routing, decisions] = await Promise.all([
     readRequiredFile(SQUAD_AGENT_MD),

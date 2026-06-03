@@ -11,7 +11,6 @@
  */
 
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import semver from "semver";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -45,6 +44,14 @@ interface PackageJsonShape {
   [key: string]: unknown;
 }
 
+interface VendoredPackageJsonShape {
+  version?: string;
+  [key: string]: unknown;
+}
+
+const vendoredPackageJsonUrl = new URL("../../squad/package.json", import.meta.url);
+const coordinatorPackageJsonUrl = new URL("../../package.json", import.meta.url);
+
 function normalizeMaxVersion(maxVersion: string): string {
   // "0.10.x" means the full 0.10 minor series is valid; exclusive upper bound is 0.11.0
   if (maxVersion.endsWith(".x")) {
@@ -59,19 +66,22 @@ function normalizeMaxVersion(maxVersion: string): string {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Read the vendored Squad version from squad/VERSION and package.json squad metadata.
- * squad/VERSION is the authoritative pinned version; package.json holds the range.
+ * Read the vendored Squad version from squad/package.json and package.json squad metadata.
+ * The vendored package version is the authoritative pin; package.json holds the range.
  */
-export async function readVendoredVersion(teamRoot: string): Promise<SquadVersionMeta> {
-  const versionFilePath = path.join(teamRoot, "squad", "VERSION");
-  const packageJsonPath = path.join(teamRoot, "package.json");
-
-  const [versionFileContent, packageJsonContent] = await Promise.all([
-    fs.readFile(versionFilePath, "utf8"),
-    fs.readFile(packageJsonPath, "utf8"),
+export async function readVendoredVersion(_teamRoot?: string): Promise<SquadVersionMeta> {
+  const [vendoredPackageJsonContent, packageJsonContent] = await Promise.all([
+    fs.readFile(vendoredPackageJsonUrl, "utf8"),
+    fs.readFile(coordinatorPackageJsonUrl, "utf8"),
   ]);
 
-  const version = versionFileContent.trim();
+  const vendoredPackageJson = JSON.parse(vendoredPackageJsonContent) as VendoredPackageJsonShape;
+  const version = vendoredPackageJson.version?.trim();
+
+  if (!version) {
+    throw new Error("Vendored Squad package.json is missing a version field");
+  }
+
   const packageJson = JSON.parse(packageJsonContent) as PackageJsonShape;
   const squadMeta = packageJson.squad ?? {};
 
@@ -119,8 +129,8 @@ export function checkCompatibility(
  * Runtime compatibility check — reads the vendored version and compares it
  * against the package.json range. Emits a console warning on mismatch.
  */
-export async function runCompatibilityCheck(teamRoot: string): Promise<CompatibilityResult> {
-  const meta = await readVendoredVersion(teamRoot);
+export async function runCompatibilityCheck(_teamRoot?: string): Promise<CompatibilityResult> {
+  const meta = await readVendoredVersion();
   const result = checkCompatibility(meta.version, meta);
 
   if (!result.compatible) {

@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.2] — 2026-06-03
+
+### Fixed
+- `squad/VERSION` never existed in upstream `bradygaster/squad` — all startup version reads were broken. Version now read from `squad/package.json` across all modules (`version.ts`, `coordinator.ts`, `system-prompt.ts`, `context/recovery.ts`)
+- `scripts/check-version.ts` pointed to non-existent `{sovereignRoot}/squad/VERSION`; fixed to read `packages/coordinator/squad/package.json`
+
+### Changed
+- `scripts/sync-squad.ts` rewritten for git submodule model — replaces legacy tarball download/extract flow with `git fetch --tags` + `git checkout v{version}`
+- `src/upstream/sync.ts` tarball sync logic (`syncSquadUpstream()`) retired; `checkForUpdates()` retained
+
+### Added
+- `/squad-update` command implemented (previously a stub) — fetches latest Squad submodule tag, checks out, updates `package.json` squad fields, reloads extension
+- Startup update-available check: notifies on newer Squad submodule tag or newer `@pi-squad/coordinator` npm version (non-blocking, fire-and-forget)
+
+---
+
 ## [0.1.1] — 2026-06-03
 
 ### Security

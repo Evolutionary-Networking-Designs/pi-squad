@@ -154,8 +154,8 @@ describe("context recovery", () => {
 
     readFileMock.mockImplementation(async (filePath) => {
       const normalizedPath = String(filePath);
-      if (normalizedPath.includes("squad/VERSION")) {
-        return "0.9.4\n";
+      if (normalizedPath.includes("squad/package.json")) {
+        return JSON.stringify({ version: "0.9.4" });
       }
       throw createMissingError(normalizedPath);
     });

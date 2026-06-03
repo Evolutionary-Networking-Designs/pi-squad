@@ -4,7 +4,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -147,14 +147,15 @@ async function readSquadMeta(): Promise<PackageSquadMeta | null> {
   }
 }
 
-async function readSquadVersion(teamRoot: string): Promise<string | null> {
-  const versionPath = resolve(new URL("../../squad/VERSION", import.meta.url).pathname);
-  const fromVendored = await readFileSafe(versionPath);
-  if (fromVendored) {
-    return fromVendored.trim();
+async function readSquadVersion(_teamRoot: string): Promise<string | null> {
+  try {
+    const packageJsonPath = fileURLToPath(new URL("../../squad/package.json", import.meta.url));
+    const raw = await readFile(packageJsonPath, "utf8");
+    const pkg = JSON.parse(raw) as { version?: string };
+    return pkg.version?.trim() ?? null;
+  } catch {
+    return null;
   }
-
-  return readFileSafe(join(teamRoot, ".squad", "VERSION"));
 }
 
 async function readAgentPrompt(): Promise<string> {

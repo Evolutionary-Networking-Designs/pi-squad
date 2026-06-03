@@ -415,8 +415,9 @@ function estimateDroppableSections(ctx: RecoveryContext): Map<string, number> {
 
 async function readSquadVersion(): Promise<string> {
   try {
-    const raw = await readFile(new URL("../../squad/VERSION", import.meta.url), "utf8");
-    return raw.trim() || "unknown";
+    const raw = await readFile(new URL("../../squad/package.json", import.meta.url), "utf8");
+    const pkg = JSON.parse(raw) as { version?: string };
+    return pkg.version?.trim() || "unknown";
   } catch {
     return "unknown";
   }

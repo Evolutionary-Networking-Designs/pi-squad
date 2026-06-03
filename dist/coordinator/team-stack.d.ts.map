@@ -1,0 +1,1 @@
+{"version":3,"file":"team-stack.d.ts","sourceRoot":"","sources":["../../src/coordinator/team-stack.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;GAUG;AAOH,OAAO,KAAK,EAAc,SAAS,EAAE,SAAS,EAAE,MAAM,aAAa,CAAC;AA8EpE,wBAAsB,cAAc,CAClC,OAAO,EAAE,MAAM,EACf,KAAK,EAAE,MAAM,GAAG,OAAO,GACtB,OAAO,CAAC,SAAS,CAAC,CAepB;AAED,wBAAsB,gBAAgB,CAAC,GAAG,GAAE,MAAsB,GAAG,OAAO,CAAC,SAAS,CAAC,CA4CtF"}

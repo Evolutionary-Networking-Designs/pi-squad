@@ -12,6 +12,9 @@ import type { Coordinator } from "./coordinator.js";
 const SQUAD_AGENT_MD = fileURLToPath(
   new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
 );
+const SQUAD_VERSION_FILE = fileURLToPath(
+  new URL("../../../../squad/VERSION", import.meta.url),
+);
 const TEAM_MD_FILENAME = "team.md";
 const ROUTING_MD_FILENAME = "routing.md";
 const DECISIONS_MD_FILENAME = "decisions.md";
@@ -166,22 +169,34 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
   const routingPath = join(teamRoot, ".squad", ROUTING_MD_FILENAME);
   const decisionsPath = join(teamRoot, ".squad", DECISIONS_MD_FILENAME);
 
-  const [squadAgent, team, routing, decisions] = await Promise.all([
+  const squadVersionPromise = readFile(SQUAD_VERSION_FILE, "utf8").catch(() => {
+    console.warn(
+      "[pi-squad] Could not read squad/VERSION — version display may show placeholder",
+    );
+    return null;
+  });
+
+  const [squadAgent, squadVersion, team, routing, decisions] = await Promise.all([
     readRequiredFile(SQUAD_AGENT_MD),
+    squadVersionPromise,
     readOptionalFile(teamPath),
     readOptionalFile(routingPath),
     readOptionalFile(decisionsPath),
   ]);
 
+  const stampedSquadAgent = squadVersion
+    ? squadAgent.replace(/0\.0\.0-source/g, squadVersion.trim())
+    : squadAgent;
+
   const normalizedTeam = team?.trim() || null;
   if (!normalizedTeam) {
     console.warn("[pi-squad] Missing .squad/team.md; using minimal coordinator prompt.");
-    return squadAgent.trim();
+    return stampedSquadAgent.trim();
   }
 
   const normalizedDecisions = decisions?.trim() || null;
   return enforcePromptBudget(
-    squadAgent,
+    stampedSquadAgent,
     normalizedTeam,
     routing?.trim() || null,
     normalizedDecisions && normalizedDecisions.length > 0 ? normalizedDecisions : null,

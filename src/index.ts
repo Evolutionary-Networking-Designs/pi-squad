@@ -7,18 +7,39 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "./coordinator/system-prompt.js";
 import { initializeCoordinator } from "./coordinator/coordinator.js";
 
+const HOOK_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`[pi-squad] before_agent_start hook timed out after ${ms}ms`)),
+        ms,
+      ),
+    ),
+  ]);
+}
+
 export default async function (pi: ExtensionAPI): Promise<void> {
   const coordinator = await initializeCoordinator(pi);
 
   pi.on("before_agent_start", async (event, _ctx) => {
-    const coordinatorPrompt = await coordinator.getSystemPrompt();
-    const systemPrompt = buildSystemPrompt(event.systemPrompt, coordinatorPrompt);
+    try {
+      const hookWork = async () => {
+        const coordinatorPrompt = await coordinator.getSystemPrompt();
+        const systemPrompt = buildSystemPrompt(event.systemPrompt, coordinatorPrompt);
+        await coordinator.assessContext(systemPrompt);
+        return { systemPrompt };
+      };
 
-    await coordinator.assessContext(systemPrompt);
-
-    return {
-      systemPrompt,
-    };
+      return await withTimeout(hookWork(), HOOK_TIMEOUT_MS);
+    } catch (error) {
+      console.warn(
+        `[pi-squad] before_agent_start hook failed; degrading to default system prompt. ${String(error)}`,
+      );
+      return { systemPrompt: event.systemPrompt };
+    }
   });
 
   pi.registerCommand("squad", {

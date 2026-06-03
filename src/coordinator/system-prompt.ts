@@ -11,10 +11,10 @@ import type { Coordinator } from "./coordinator.js";
 import { sanitize } from "../context/ingestion/sanitizer.js";
 
 const SQUAD_AGENT_MD = fileURLToPath(
-  new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
+  new URL("../../squad/.github/agents/squad.agent.md", import.meta.url),
 );
 const SQUAD_VERSION_FILE = fileURLToPath(
-  new URL("../../../../squad/VERSION", import.meta.url),
+  new URL("../../squad/VERSION", import.meta.url),
 );
 const TEAM_MD_FILENAME = "team.md";
 const ROUTING_MD_FILENAME = "routing.md";
@@ -285,7 +285,7 @@ export async function buildSystemPrompt(
   }
 
   const initCtx = coordinator.getInitContext();
-  const skillPath = new URL("../../../../squad/.copilot/skills/init-mode/SKILL.md", import.meta.url);
+  const skillPath = new URL("../../squad/.copilot/skills/init-mode/SKILL.md", import.meta.url);
   const initSkill = await readFile(skillPath, "utf8").catch(() => "");
   const contextBlock = [
     "## Init Context",

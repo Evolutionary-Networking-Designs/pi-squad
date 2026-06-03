@@ -1,0 +1,4 @@
+[submodule "squad"]
+	path = squad
+	url = https://github.com/bradygaster/squad.git
+	branch = main

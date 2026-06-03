@@ -64,8 +64,7 @@
     "build": "tsc",
     "test": "vitest run",
     "dev": "tsc --watch",
-    "prepublishOnly": "cp -r ../../squad ./squad && npm run build",
-    "postpublish": "rm -rf ./squad"
+    "prepublishOnly": "npm run build"
   },
   "squad": {
     "version": "0.9.4",

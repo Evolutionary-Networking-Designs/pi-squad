@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.1] — 2026-06-03
+
+### Security
+- **Pre-push OSS boundary guard hook** — New `.githooks/pre-push` hook prevents accidental commits of restricted terms to the public repo. Contributors configure their own `~/.githooks/.boundary-terms` file for custom policy. See `.githooks/.boundary-terms.example` for setup. (closes #1)
+
+### Added
+- **Comprehensive test suite** — `tests/` directory now wired into vitest with 69 tests across 16 files (expanded from 23 tests in v0.1.0). Full coverage of sanitizer, routing, recovery, and scribe systems.
+
+### Fixed
+- **Squad template path resolution** — Correctly resolves Squad `.squad/` paths in both community (flat) and sovereign (monorepo) layouts, ensuring template discovery works across deployment variants
+- **Regex backtracking in sanitizer** — Fixed unbounded regex in `RE_BASE64_KEY` that could cause performance issues on large payloads
+- **npm package repository URL format** — Corrected package.json URL to valid npm format for proper package registry resolution
+
+### Changed
+- **Build configuration** — `tsconfig.json` now inlined in community repo (was referencing sovereign monorepo path)
+- **CI improvements** — Added npm stage publish workflow (OIDC trusted publishing with beta tag); `package-lock.json` included for deterministic `npm ci` builds
+
+---
+
 ## [0.1.0] — 2026-06-03
 
 ### Added

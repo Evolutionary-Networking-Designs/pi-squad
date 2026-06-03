@@ -1,6 +1,6 @@
 {
   "name": "@pi-squad/coordinator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bring Squad's multi-agent coordination to Pi — your whole team, no cloud required",
   "type": "module",
   "main": "./dist/index.js",

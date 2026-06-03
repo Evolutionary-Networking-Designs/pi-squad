@@ -22,7 +22,7 @@ import { resolveTeamStack } from "./team-stack.js";
 import type { AuthAdapter } from "../auth/adapter.js";
 
 const SQUAD_AGENT_MD = fileURLToPath(
-  new URL("../../squad/.github/agents/squad.agent.md", import.meta.url),
+  new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
 );
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
 const CHARS_PER_TOKEN = 4;
@@ -131,7 +131,7 @@ async function readSquadMeta(): Promise<PackageSquadMeta | null> {
 }
 
 async function readSquadVersion(teamRoot: string): Promise<string | null> {
-  const versionPath = resolve(new URL("../../squad/VERSION", import.meta.url).pathname);
+  const versionPath = resolve(new URL("../../../../squad/VERSION", import.meta.url).pathname);
   const fromVendored = await readFileSafe(versionPath);
   if (fromVendored) {
     return fromVendored.trim();

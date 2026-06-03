@@ -1,0 +1,7 @@
+# OSS boundary guard — restricted term list
+# Copy this file to .boundary-terms and add your private terms (one per line).
+# This file (.boundary-terms) is gitignored; it stays local to your checkout.
+#
+# Example:
+#   my-private-service
+#   INTERNAL_ONLY

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# OSS boundary guard — blocks pushes containing private terms defined in .githooks/.boundary-terms
+
+set -euo pipefail
+
+TERMS_FILE="$(dirname "$0")/.boundary-terms"
+
+if ! [ -d src ]; then
+  exit 0
+fi
+
+if ! [ -f "$TERMS_FILE" ]; then
+  exit 0
+fi
+
+PATTERN="$(grep -v '^\s*#' "$TERMS_FILE" | grep -v '^\s*$' | paste -sd '|')"
+
+if [ -z "$PATTERN" ]; then
+  exit 0
+fi
+
+if MATCHES="$(grep -rEn --color=never "$PATTERN" src/ 2>/dev/null)"; then
+  echo "ERROR: Push blocked by OSS boundary guard."
+  echo "Found restricted terms in src/:"
+  echo "$MATCHES"
+  echo "Remove these terms before pushing."
+  exit 1
+fi
+
+exit 0

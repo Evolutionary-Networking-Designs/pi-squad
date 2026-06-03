@@ -88,6 +88,18 @@ npm test        # vitest run
 
 See the root [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) for the full design specification.
 
+## Security
+
+This repo includes a pre-push git hook that scans `src/` for restricted terms before each push.
+Enable it with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Add your restricted terms to `.githooks/.boundary-terms` (one term per line, `#` for comments).
+This file is gitignored — terms stay local to your checkout.
+
 ## Credits
 
 `@pi-squad/coordinator` is built on the shoulders of three open-source projects:

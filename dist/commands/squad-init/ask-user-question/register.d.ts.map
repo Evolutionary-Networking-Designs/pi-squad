@@ -1,1 +1,0 @@
-{"version":3,"file":"register.d.ts","sourceRoot":"","sources":["../../../../src/commands/squad-init/ask-user-question/register.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,iCAAiC,CAAC;AAEpE,OAAO,EAAE,WAAW,EAAE,MAAM,cAAc,CAAC;AA0E3C,OAAO,EAAE,WAAW,EAAE,CAAC;AAEvB,wBAAgB,8BAA8B,CAAC,EAAE,EAAE,YAAY,GAAG,IAAI,CAuErE"}

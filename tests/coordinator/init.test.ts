@@ -49,6 +49,7 @@ describe('coordinator initialization', () => {
     expect(pi.handlers.get('session_before_compact')).toHaveLength(2);
     expect(pi.handlers.get('session_shutdown')).toHaveLength(1);
     expect(pi.commands.has('squad')).toBe(true);
+    expect(pi.commands.has('squad-init')).toBe(true);
     expect(pi.commands.has('squad-update')).toBe(true);
   });
 

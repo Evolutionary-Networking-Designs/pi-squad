@@ -4,6 +4,7 @@
  */
 import { buildSystemPrompt } from "./coordinator/system-prompt.js";
 import { initializeCoordinator } from "./coordinator/coordinator.js";
+import { registerSquadInitCommand } from "./commands/squad-init.js";
 import { initializeWorkMonitor } from "./ralph/work-monitor.js";
 const HOOK_TIMEOUT_MS = 10_000;
 function withTimeout(promise, ms) {
@@ -37,6 +38,7 @@ export default async function (pi) {
             await coordinator.route(args, ctx);
         },
     });
+    registerSquadInitCommand(pi);
     pi.registerCommand("squad-update", {
         description: "Sync Squad upstream and reload",
         handler: async (_args, ctx) => {

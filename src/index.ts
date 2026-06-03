@@ -6,6 +6,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { buildSystemPrompt } from "./coordinator/system-prompt.js";
 import { initializeCoordinator } from "./coordinator/coordinator.js";
+import { registerSquadInitCommand } from "./commands/squad-init.js";
 import { initializeWorkMonitor } from "./ralph/work-monitor.js";
 
 const HOOK_TIMEOUT_MS = 10_000;
@@ -51,6 +52,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
       await coordinator.route(args, ctx);
     },
   });
+
+  registerSquadInitCommand(pi);
 
   pi.registerCommand("squad-update", {
     description: "Sync Squad upstream and reload",

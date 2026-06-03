@@ -6,13 +6,14 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import semver from "semver";
 
 import { probeModule, registerBuiltinAskUserQuestion } from "./commands/squad-init/ask-user-question/register.js";
 import { registerSquadInitCommand } from "./commands/squad-init.js";
 import { initializeCoordinator } from "./coordinator/coordinator.js";
 import { buildSystemPrompt } from "./coordinator/system-prompt.js";
+import { registerSquadDispatchTool } from "./coordinator/spawn.js";
 import { initializeWorkMonitor } from "./ralph/work-monitor.js";
 import { checkCompatibility } from "./upstream/version.js";
 
@@ -176,6 +177,21 @@ async function checkSquadUpdate(pi: ExtensionAPI): Promise<void> {
   }
 }
 
+function setSquadStartupUi(ctx: ExtensionContext): void {
+  ctx.ui?.setWorkingMessage("Loading Squad coordinator...");
+  ctx.ui?.setStatus("pi-squad", ctx.ui.theme.fg("accent", "Squad loading"));
+}
+
+function setSquadReadyUi(ctx: ExtensionContext): void {
+  ctx.ui?.setWorkingMessage("Waiting for model response...");
+  ctx.ui?.setStatus("pi-squad", undefined);
+}
+
+function restoreSquadUi(ctx: ExtensionContext): void {
+  ctx.ui?.setWorkingMessage();
+  ctx.ui?.setStatus("pi-squad", undefined);
+}
+
 async function checkCoordinatorUpdate(pi: ExtensionAPI): Promise<void> {
   try {
     const pkg = await readCoordinatorPackage();
@@ -217,6 +233,7 @@ async function checkCoordinatorUpdate(pi: ExtensionAPI): Promise<void> {
 
 export default async function (pi: ExtensionAPI): Promise<void> {
   const coordinator = await initializeCoordinator(pi);
+  registerSquadDispatchTool(pi);
   const rpivPresent = await probeModule("@juicesharp/rpiv-ask-user-question");
   if (!rpivPresent) {
     registerBuiltinAskUserQuestion(pi);
@@ -228,7 +245,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     checkCoordinatorUpdate(pi).catch(() => {}),
   ]);
 
-  pi.on("before_agent_start", async (event, _ctx) => {
+  pi.on("before_agent_start", async (event, ctx) => {
+    setSquadStartupUi(ctx);
     try {
       const hookWork = async () => {
         const coordinatorPrompt = await coordinator.getSystemPrompt();
@@ -238,13 +256,24 @@ export default async function (pi: ExtensionAPI): Promise<void> {
         return { systemPrompt };
       };
 
-      return await withTimeout(hookWork(), HOOK_TIMEOUT_MS);
+      const result = await withTimeout(hookWork(), HOOK_TIMEOUT_MS);
+      setSquadReadyUi(ctx);
+      return result;
     } catch (error) {
+      restoreSquadUi(ctx);
       console.warn(
         `[pi-squad] before_agent_start hook failed; degrading to default system prompt. ${String(error)}`,
       );
       return { systemPrompt: event.systemPrompt };
     }
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    restoreSquadUi(ctx);
+  });
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    restoreSquadUi(ctx);
   });
 
   pi.registerCommand("squad", {

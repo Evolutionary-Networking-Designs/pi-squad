@@ -44,10 +44,10 @@ describe('coordinator initialization', () => {
 
     expect(pi.handlers.get('before_agent_start')).toHaveLength(2);
     expect(pi.handlers.get('session_start')).toHaveLength(2);
-    expect(pi.handlers.get('agent_end')).toHaveLength(1);
+    expect(pi.handlers.get('agent_end')).toHaveLength(2);
     expect(pi.handlers.get('turn_end')).toHaveLength(2);
     expect(pi.handlers.get('session_before_compact')).toHaveLength(2);
-    expect(pi.handlers.get('session_shutdown')).toHaveLength(1);
+    expect(pi.handlers.get('session_shutdown')).toHaveLength(2);
     expect(pi.commands.has('squad')).toBe(true);
     expect(pi.commands.has('squad-init')).toBe(true);
     expect(pi.commands.has('squad-update')).toBe(true);

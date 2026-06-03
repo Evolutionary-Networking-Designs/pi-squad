@@ -17,10 +17,6 @@ import { getCompositeSystemPrompt } from "./composite-prompt.js";
 import { MAX_PROMPT_CHARS, getSystemPrompt } from "./system-prompt.js";
 import { resolveTeamStack } from "./team-stack.js";
 
-// AuthAdapter type is imported for typing only — concrete impl comes from Ishikawa
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { AuthAdapter } from "../auth/adapter.js";
-
 const SQUAD_AGENT_MD = fileURLToPath(
   new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
 );

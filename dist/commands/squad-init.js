@@ -1,16 +1,17 @@
-import { access, mkdir, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
-import { detectEnvironment } from "./squad-init/detect.js";
-const SQUAD_DIR = ".squad";
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { detectEnvironment } from './squad-init/detect.js';
+const SQUAD_DIR = '.squad';
 const DIRECTORIES = [
-    ".squad/decisions/inbox",
-    ".squad/decisions/processed",
-    ".squad/agents",
-    ".squad/orchestration-log",
-    ".squad/log",
-    ".squad/casting",
-    ".squad/skills",
-    ".squad/identity",
+    '.squad/decisions/inbox',
+    '.squad/decisions/processed',
+    '.squad/agents',
+    '.squad/orchestration-log',
+    '.squad/log',
+    '.squad/casting',
+    '.squad/skills',
+    '.squad/identity',
 ];
 const TEAM_SEED = `# Squad Team
 
@@ -69,14 +70,64 @@ How to decide who handles what.
 9. Scribe records substantial work automatically.
 10. Ralph monitors work health automatically.
 `;
-const DECISIONS_SEED = "# Decisions\n";
-const CEREMONIES_SEED = "# Ceremonies\n";
-const SEED_FILES = [
-    { path: ".squad/team.md", content: TEAM_SEED },
-    { path: ".squad/routing.md", content: ROUTING_SEED },
-    { path: ".squad/decisions.md", content: DECISIONS_SEED },
-    { path: ".squad/ceremonies.md", content: CEREMONIES_SEED },
-];
+const DECISIONS_SEED = '# Decisions\n';
+const CEREMONIES_SEED = '# Ceremonies\n';
+const CASTING_POLICY_SEED = `{
+  "casting_policy_version": "1.1",
+  "allowlist_universes": [
+    "The Usual Suspects",
+    "Reservoir Dogs",
+    "Alien",
+    "Ocean's Eleven",
+    "Arrested Development",
+    "Star Wars",
+    "The Matrix",
+    "Firefly",
+    "The Goonies",
+    "The Simpsons",
+    "Breaking Bad",
+    "Lost",
+    "Marvel Cinematic Universe",
+    "DC Universe",
+    "Futurama"
+  ],
+  "universe_capacity": {
+    "The Usual Suspects": 6,
+    "Reservoir Dogs": 8,
+    "Alien": 8,
+    "Ocean's Eleven": 14,
+    "Arrested Development": 15,
+    "Star Wars": 12,
+    "The Matrix": 10,
+    "Firefly": 10,
+    "The Goonies": 8,
+    "The Simpsons": 20,
+    "Breaking Bad": 12,
+    "Lost": 18,
+    "Marvel Cinematic Universe": 25,
+    "DC Universe": 18,
+    "Futurama": 12
+  }
+}
+`;
+const CASTING_REGISTRY_SEED = `{
+  "agents": {}
+}
+`;
+const CASTING_HISTORY_SEED = `{
+  "universe_usage_history": [],
+  "assignment_cast_snapshots": {}
+}
+`;
+const SQUAD_TEMPLATE_DIRECTORIES = ['templates', '.squad-templates'];
+function packageRootFromThisFile() {
+    const thisFile = fileURLToPath(import.meta.url);
+    return join(dirname(thisFile), '..', '..');
+}
+function resolveSquadDirectoryCandidates() {
+    const packageRoot = packageRootFromThisFile();
+    return [join(packageRoot, 'squad'), join(packageRoot, '..', '..', 'squad')];
+}
 async function pathExists(path) {
     try {
         await access(path);
@@ -85,6 +136,17 @@ async function pathExists(path) {
     catch {
         return false;
     }
+}
+async function loadSquadTemplate(name, fallback) {
+    for (const squadDir of resolveSquadDirectoryCandidates()) {
+        for (const templateDir of SQUAD_TEMPLATE_DIRECTORIES) {
+            const templatePath = join(squadDir, templateDir, name);
+            if (await pathExists(templatePath)) {
+                return readFile(templatePath, 'utf8');
+            }
+        }
+    }
+    return fallback;
 }
 async function ensureDirectory(path) {
     if (await pathExists(path)) {
@@ -143,8 +205,23 @@ export async function initializeSquadProject(projectRoot) {
             createdDirectories.push(absolutePath);
         }
     }
+    const [ceremonies, castingPolicy, castingRegistry, castingHistory] = await Promise.all([
+        loadSquadTemplate('ceremonies.md', CEREMONIES_SEED),
+        loadSquadTemplate('casting-policy.json', CASTING_POLICY_SEED),
+        loadSquadTemplate('casting-registry.json', CASTING_REGISTRY_SEED),
+        loadSquadTemplate('casting-history.json', CASTING_HISTORY_SEED),
+    ]);
+    const seedFiles = [
+        { path: '.squad/team.md', content: TEAM_SEED },
+        { path: '.squad/routing.md', content: ROUTING_SEED },
+        { path: '.squad/decisions.md', content: DECISIONS_SEED },
+        { path: '.squad/ceremonies.md', content: ceremonies },
+        { path: '.squad/casting/policy.json', content: castingPolicy },
+        { path: '.squad/casting/registry.json', content: castingRegistry },
+        { path: '.squad/casting/history.json', content: castingHistory },
+    ];
     const createdFiles = [];
-    for (const seedFile of SEED_FILES) {
+    for (const seedFile of seedFiles) {
         const absolutePath = join(projectRoot, seedFile.path);
         if (await ensureFile(absolutePath, seedFile.content)) {
             createdFiles.push(absolutePath);
@@ -158,22 +235,22 @@ export async function initializeSquadProject(projectRoot) {
     };
 }
 export function registerSquadInitCommand(pi, coordinator) {
-    pi.registerCommand("squad-init", {
-        description: "Initialize .squad scaffolding for this project",
+    pi.registerCommand('squad-init', {
+        description: 'Initialize .squad scaffolding for this project',
         handler: async (_args, ctx) => {
-            const teamPath = join(ctx.cwd, ".squad", "team.md");
+            const teamPath = join(ctx.cwd, '.squad', 'team.md');
             if (await pathExists(teamPath)) {
                 coordinator?.clearInitMode();
-                emitMessage(ctx, "Squad is already initialized in this project. Use `/squad` to start.");
+                emitMessage(ctx, 'Squad is already initialized in this project. Use `/squad` to start.');
                 return;
             }
             const { userName, projectName, detectedExtensions } = await detectEnvironment(ctx.cwd);
             coordinator?.setInitMode({ userName, projectName, detectedExtensions });
-            const greeting = userName ? `Hey ${userName}` : "Hey";
+            const greeting = userName ? `Hey ${userName}` : 'Hey';
             const message = `${greeting} — starting Squad setup. I'll ask a few questions to build your team.\n` +
-                "Initialized Squad for this project.\n" +
-                "Type anything to begin, or use /squad to skip setup and scaffold a default team directly.\n" +
-                "Use `/squad` to start the coordinator.";
+                'Initialized Squad for this project.\n' +
+                'Type anything to begin, or use /squad to skip setup and scaffold a default team directly.\n' +
+                'Use `/squad` to start the coordinator.';
             emitMessage(ctx, message);
         },
     });

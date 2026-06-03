@@ -26,10 +26,7 @@ Thumbs.db
 
 # Local npm registry config (contains auth tokens)
 .npmrc
-<<<<<<< Updated upstream
 
 # Pi runtime artifacts
 .pi/todos/
 .fallow/
-=======
->>>>>>> Stashed changes

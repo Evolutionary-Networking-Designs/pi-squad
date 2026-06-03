@@ -32,6 +32,26 @@
     "url": "git+https://github.com/KieraKujisawa/pi-squad.git"
   },
   "license": "MIT",
+  "acknowledgements": [
+    {
+      "name": "Pi",
+      "author": "Mario Zechner",
+      "url": "https://github.com/earendil-works/pi",
+      "license": "MIT"
+    },
+    {
+      "name": "Squad",
+      "author": "Brady Gaster and contributors",
+      "url": "https://github.com/bradygaster/squad",
+      "license": "MIT"
+    },
+    {
+      "name": "rpiv-ask-user-question",
+      "author": "juicesharp",
+      "url": "https://github.com/juicesharp/rpiv-mono",
+      "license": "MIT"
+    }
+  ],
   "pi": {
     "extensions": [
       "./dist/index.js"

@@ -12,16 +12,19 @@ const testRoot = join(packageRoot, '.test-work', 'squad-init');
 const vendoredTemplateDirs = ['templates', '.squad-templates'] as const;
 
 async function readVendoredTemplate(name: string): Promise<string> {
-  const squadRoot = join(packageRoot, '..', '..', 'squad');
+  // Squad submodule may be at the package root (community repo) or two levels up (sovereign monorepo)
+  const squadRootCandidates = [join(packageRoot, 'squad'), join(packageRoot, '..', '..', 'squad')];
 
-  for (const templateDir of vendoredTemplateDirs) {
-    const candidate = join(squadRoot, templateDir, name);
+  for (const squadRoot of squadRootCandidates) {
+    for (const templateDir of vendoredTemplateDirs) {
+      const candidate = join(squadRoot, templateDir, name);
 
-    try {
-      return await readFile(candidate, 'utf8');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
+      try {
+        return await readFile(candidate, 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
       }
     }
   }

@@ -1,9 +1,8 @@
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
 
 jobs:
   publish:
@@ -40,5 +39,5 @@ jobs:
           fi
           echo "✅ Tag matches package version: $PKG_VERSION"
 
-      - name: Stage publish
-        run: npm stage publish --ignore-scripts --provenance --access public
+      - name: Publish
+        run: npm publish --provenance --access public

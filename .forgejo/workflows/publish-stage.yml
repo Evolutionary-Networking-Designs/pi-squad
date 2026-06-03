@@ -32,4 +32,4 @@ jobs:
       - name: Publish (beta, internal)
         run: npm publish --tag beta --ignore-scripts --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.FORGEJO_NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.INTERNAL_NPM_TOKEN }}

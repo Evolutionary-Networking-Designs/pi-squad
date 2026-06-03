@@ -24,9 +24,6 @@ Thumbs.db
 .env.local
 .githooks/.boundary-terms
 
-# Local npm registry config (contains auth tokens)
-.npmrc
-
 # Pi runtime artifacts
 .pi/todos/
 .fallow/

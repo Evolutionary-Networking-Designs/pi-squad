@@ -11,6 +11,8 @@
  * coordinator guardrails" directive.
  */
 
+import type { AgentSpawnDirective, KnownDirectiveType, RouteDirective } from "./router.js";
+
 // ─── Violation Types ──────────────────────────────────────────────────────────
 
 /**
@@ -121,4 +123,315 @@ export interface CoordinatorGuard {
    *         `DOMAIN_WORK_ATTEMPTED` depending on the nature of the action
    */
   assertRequiresSpawn(action: string): void;
+}
+
+// ─── Runtime Directive Guard ───────────────────────────────────────────────────
+
+const KNOWN_DIRECTIVE_TYPES = new Set<KnownDirectiveType>([
+  "agent_spawn",
+  "squad_update",
+  "direct_response",
+  "unknown",
+]);
+
+export type GuardViolationCode =
+  | "UNKNOWN_DIRECTIVE_TYPE"
+  | "MISSING_REQUIRED_FIELD"
+  | "CIRCULAR_SPAWN_REFERENCE"
+  | "SCHEMA_CONSTRAINT_VIOLATION";
+
+export interface GuardViolation {
+  readonly code: GuardViolationCode;
+  readonly message: string;
+  readonly directiveType: string;
+  readonly field?: string;
+}
+
+type RouteDirectiveLike = { type: string } & Record<string, unknown>;
+
+export type GuardCheckResult =
+  | { readonly ok: true; readonly directive: RouteDirective }
+  | { readonly ok: false; readonly violation: GuardViolation };
+
+function isKnownDirectiveType(type: string): type is KnownDirectiveType {
+  return KNOWN_DIRECTIVE_TYPES.has(type as KnownDirectiveType);
+}
+
+function hasRequiredText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function truncateForLog(s: string, maxLen = 80): string {
+  return s.slice(0, maxLen) + (s.length > maxLen ? "…[truncated]" : "");
+}
+
+const AGENT_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,49}$/;
+const MAX_AGENT_SPAWN_TEXT_LENGTH = 32_000;
+const MAX_MESSAGE_TEXT_LENGTH = 8_000;
+const MIN_TIMEOUT_MS = 1_000;
+const MAX_TIMEOUT_MS = 300_000;
+const AGENT_SPAWN_ALLOWED_FIELDS = new Set([
+  "type",
+  "agentId",
+  "prompt",
+  "systemPrompt",
+  "model",
+  "timeoutMs",
+  "parentAgentId",
+  "spawnPath",
+]);
+
+function detectCircularSpawnReference(directive: AgentSpawnDirective): boolean {
+  if (directive.parentAgentId && directive.parentAgentId === directive.agentId) {
+    return true;
+  }
+
+  const path = directive.spawnPath ?? [];
+  if (path.length === 0) {
+    return false;
+  }
+
+  const seen = new Set<string>();
+  for (const node of path) {
+    if (seen.has(node)) {
+      return true;
+    }
+    seen.add(node);
+  }
+
+  return seen.has(directive.agentId);
+}
+
+export class GuardChecker {
+  validate(directive: RouteDirectiveLike): GuardCheckResult {
+    if (!isKnownDirectiveType(directive.type)) {
+      return {
+        ok: false,
+        violation: {
+          code: "UNKNOWN_DIRECTIVE_TYPE",
+          message: `Unknown directive type "${directive.type}"`,
+          directiveType: directive.type,
+        },
+      };
+    }
+
+    if (directive.type === "unknown") {
+      return { ok: true, directive: { type: "unknown", payload: directive } };
+    }
+
+    if (directive.type === "agent_spawn") {
+      if (!hasRequiredText(directive.agentId)) {
+        return {
+          ok: false,
+          violation: {
+            code: "MISSING_REQUIRED_FIELD",
+            message: "agent_spawn requires a non-empty agentId",
+            directiveType: directive.type,
+            field: "agentId",
+          },
+        };
+      }
+
+      if (!hasRequiredText(directive.prompt)) {
+        return {
+          ok: false,
+          violation: {
+            code: "MISSING_REQUIRED_FIELD",
+            message: "agent_spawn requires a non-empty prompt",
+            directiveType: directive.type,
+            field: "prompt",
+          },
+        };
+      }
+
+      // Mitigates directive spoofing that targets unexpected IDs or path-like agent identifiers.
+      if (!AGENT_ID_PATTERN.test(directive.agentId)) {
+        return {
+          ok: false,
+          violation: {
+            code: "SCHEMA_CONSTRAINT_VIOLATION",
+            message: `agent_spawn agentId fails allowlist: "${truncateForLog(directive.agentId)}"`,
+            directiveType: directive.type,
+            field: "agentId",
+          },
+        };
+      }
+
+      // Mitigates prompt-amplification payloads that try to overwhelm child agent context.
+      if (directive.prompt.length > MAX_AGENT_SPAWN_TEXT_LENGTH) {
+        return {
+          ok: false,
+          violation: {
+            code: "SCHEMA_CONSTRAINT_VIOLATION",
+            message: `agent_spawn prompt exceeds ${MAX_AGENT_SPAWN_TEXT_LENGTH} characters (${directive.prompt.length})`,
+            directiveType: directive.type,
+            field: "prompt",
+          },
+        };
+      }
+
+      // Mitigates oversized system prompt injection used to persist adversarial control text.
+      if (
+        typeof directive.systemPrompt === "string" &&
+        directive.systemPrompt.length > MAX_AGENT_SPAWN_TEXT_LENGTH
+      ) {
+        return {
+          ok: false,
+          violation: {
+            code: "SCHEMA_CONSTRAINT_VIOLATION",
+            message: `agent_spawn systemPrompt exceeds ${MAX_AGENT_SPAWN_TEXT_LENGTH} characters (${directive.systemPrompt.length})`,
+            directiveType: directive.type,
+            field: "systemPrompt",
+          },
+        };
+      }
+
+      // Mitigates runaway/liveness abuse by bounding timeouts to sane finite integer values.
+      if (Object.prototype.hasOwnProperty.call(directive, "timeoutMs")) {
+        const timeoutMs = directive.timeoutMs;
+        if (
+          typeof timeoutMs !== "number" ||
+          !Number.isFinite(timeoutMs) ||
+          !Number.isInteger(timeoutMs) ||
+          timeoutMs < MIN_TIMEOUT_MS ||
+          timeoutMs > MAX_TIMEOUT_MS
+        ) {
+          return {
+            ok: false,
+            violation: {
+              code: "SCHEMA_CONSTRAINT_VIOLATION",
+              message: `agent_spawn timeoutMs must be an integer between ${MIN_TIMEOUT_MS} and ${MAX_TIMEOUT_MS}; got "${truncateForLog(String(timeoutMs))}"`,
+              directiveType: directive.type,
+              field: "timeoutMs",
+            },
+          };
+        }
+      }
+
+      // Mitigates schema smuggling/log confusion by warning and ignoring unknown fields.
+      const extraFields = Object.keys(directive).filter(
+        (field) => !AGENT_SPAWN_ALLOWED_FIELDS.has(field),
+      );
+      if (extraFields.length > 0) {
+        console.warn(
+          `[pi-squad] agent_spawn contains unknown fields (ignored): ${truncateForLog(extraFields.join(", "), 200)}`,
+        );
+      }
+
+      const typedDirective: AgentSpawnDirective = {
+        type: "agent_spawn",
+        agentId: directive.agentId,
+        prompt: directive.prompt,
+        systemPrompt: hasRequiredText(directive.systemPrompt) ? directive.systemPrompt : undefined,
+        model:
+          directive.model === "fast" ||
+          directive.model === "balanced" ||
+          directive.model === "capable"
+            ? directive.model
+            : undefined,
+        timeoutMs: typeof directive.timeoutMs === "number" ? directive.timeoutMs : undefined,
+        parentAgentId: hasRequiredText(directive.parentAgentId)
+          ? directive.parentAgentId
+          : undefined,
+        spawnPath: Array.isArray(directive.spawnPath)
+          ? directive.spawnPath.filter((value): value is string => typeof value === "string")
+          : undefined,
+      };
+
+      if (detectCircularSpawnReference(typedDirective)) {
+        return {
+          ok: false,
+          violation: {
+            code: "CIRCULAR_SPAWN_REFERENCE",
+            message: "agent_spawn contains a circular spawn reference",
+            directiveType: directive.type,
+          },
+        };
+      }
+
+      return { ok: true, directive: typedDirective };
+    }
+
+    if (directive.type === "squad_update") {
+      if (!hasRequiredText(directive.message)) {
+        return {
+          ok: false,
+          violation: {
+            code: "MISSING_REQUIRED_FIELD",
+            message: "squad_update requires a non-empty message",
+            directiveType: directive.type,
+            field: "message",
+          },
+        };
+      }
+
+      // Mitigates log-poisoning and memory-bloat payloads in coordinator status channels.
+      if (directive.message.length > MAX_MESSAGE_TEXT_LENGTH) {
+        return {
+          ok: false,
+          violation: {
+            code: "SCHEMA_CONSTRAINT_VIOLATION",
+            message: `squad_update message exceeds ${MAX_MESSAGE_TEXT_LENGTH} characters (${directive.message.length})`,
+            directiveType: directive.type,
+            field: "message",
+          },
+        };
+      }
+
+      // Mitigates oversized metadata payloads used for persistence or downstream prompt shaping.
+      if (
+        typeof directive.details === "string" &&
+        directive.details.length > MAX_MESSAGE_TEXT_LENGTH
+      ) {
+        return {
+          ok: false,
+          violation: {
+            code: "SCHEMA_CONSTRAINT_VIOLATION",
+            message: `squad_update details exceeds ${MAX_MESSAGE_TEXT_LENGTH} characters (${directive.details.length})`,
+            directiveType: directive.type,
+            field: "details",
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        directive: {
+          type: "squad_update",
+          message: directive.message,
+          details: hasRequiredText(directive.details) ? directive.details : undefined,
+        },
+      };
+    }
+
+    if (!hasRequiredText(directive.message)) {
+      return {
+        ok: false,
+        violation: {
+          code: "MISSING_REQUIRED_FIELD",
+          message: "direct_response requires a non-empty message",
+          directiveType: directive.type,
+          field: "message",
+        },
+      };
+    }
+
+    // Mitigates oversized direct-response payloads that can poison logs and coordinator state.
+    if (directive.message.length > MAX_MESSAGE_TEXT_LENGTH) {
+      return {
+        ok: false,
+        violation: {
+          code: "SCHEMA_CONSTRAINT_VIOLATION",
+          message: `direct_response message exceeds ${MAX_MESSAGE_TEXT_LENGTH} characters (${directive.message.length})`,
+          directiveType: directive.type,
+          field: "message",
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      directive: { type: "direct_response", message: directive.message },
+    };
+  }
 }

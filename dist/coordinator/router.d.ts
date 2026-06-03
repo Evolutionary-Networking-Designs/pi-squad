@@ -10,6 +10,8 @@
  * Design reference: docs/ARCHITECTURE.md §2, §6.3 (graceful degradation),
  * §7.1 (custom agents).
  */
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type SpawnExecutionResult } from "./spawn.js";
 /**
  * A registered team member in the Squad roster.
  * Parsed from `.squad/team.md` agent entries.
@@ -132,4 +134,49 @@ export interface RouterContext {
 }
 export declare function routeLocal(table: DispatchTable, signal: string, context?: RouterContext): RouteResult | null;
 export declare function routeWithEscalation(table: DispatchTable, signal: string, context?: RouterContext): RouteResult | null;
+export type KnownDirectiveType = "agent_spawn" | "squad_update" | "direct_response" | "unknown";
+export interface AgentSpawnDirective {
+    readonly type: "agent_spawn";
+    readonly agentId: string;
+    readonly prompt: string;
+    readonly systemPrompt?: string;
+    readonly model?: "fast" | "balanced" | "capable";
+    readonly timeoutMs?: number;
+    readonly parentAgentId?: string;
+    readonly spawnPath?: readonly string[];
+}
+export interface SquadUpdateDirective {
+    readonly type: "squad_update";
+    readonly message: string;
+    readonly details?: string;
+}
+export interface DirectResponseDirective {
+    readonly type: "direct_response";
+    readonly message: string;
+}
+export interface UnknownDirective {
+    readonly type: "unknown";
+    readonly originalType?: string;
+    readonly payload?: unknown;
+}
+export type RouteDirective = AgentSpawnDirective | SquadUpdateDirective | DirectResponseDirective | UnknownDirective;
+export type RouteDispatchStatus = "spawned" | "updated" | "responded" | "skipped";
+export interface RouteDispatchResult {
+    readonly directiveType: KnownDirectiveType;
+    readonly status: RouteDispatchStatus;
+    readonly message: string;
+    readonly spawn?: SpawnExecutionResult;
+}
+export interface RouteDispatchContext {
+    readonly pi: ExtensionAPI;
+    readonly sessionId: string;
+    readonly cwd?: string;
+    readonly signal?: AbortSignal;
+    readonly logger?: Pick<Console, "info" | "warn" | "debug" | "error">;
+}
+export declare class RouteDispatcher {
+    private readonly ctx;
+    constructor(ctx: RouteDispatchContext);
+    dispatch(directive: RouteDirective): Promise<RouteDispatchResult>;
+}
 //# sourceMappingURL=router.d.ts.map

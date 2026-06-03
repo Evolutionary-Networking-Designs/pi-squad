@@ -336,4 +336,5 @@ export declare class DefaultRecoveryOrchestrator {
     recover(levelOrCtx: ContextPressureLevel | RecoveryContext, maybeCtx?: RecoveryContext): Promise<RecoveryResult>;
     private recordAttempt;
 }
+export declare function createRecoveryOrchestrator(stores: RecoveryStores): DefaultRecoveryOrchestrator;
 //# sourceMappingURL=recovery.d.ts.map

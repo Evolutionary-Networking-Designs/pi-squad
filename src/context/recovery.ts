@@ -627,6 +627,9 @@ export class DefaultCheckpointStrategy {
       await mkdir(checkpointDir, { recursive: true });
       await writeFile(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
 
+      // Issue 3: write latest.json for crash recovery
+      await writeLatestJson(ctx, checkpoint);
+
       return {
         success: true,
         tokensFreed: ctx.budget.used,
@@ -745,7 +748,6 @@ export class DefaultRecoveryOrchestrator {
         this.recordAttempt(strategy.id, result.success, result.tokensFreed);
 
         if (result.success) {
-          void this.stores.root;
           return result;
         }
       } catch (error) {
@@ -798,5 +800,32 @@ function createEmptyBudget(): ContextBudget {
     utilizationPercent: 0,
     measuredAt: new Date(0).toISOString(),
   };
+}
+
+// Issue 3: lightweight latest.json written to .squad/context/ for crash recovery
+async function writeLatestJson(ctx: RecoveryContext, checkpoint: ContextCheckpoint): Promise<void> {
+  const contextDir = join(ctx.teamRoot, ".squad", "context");
+  const latestPath = join(contextDir, "latest.json");
+  const snapshot = {
+    checkpointId: checkpoint.id,
+    createdAt: checkpoint.createdAt,
+    turnIndex: checkpoint.turnIndex,
+    pressureLevel: checkpoint.triggerLevel,
+    tokenCount: checkpoint.budget.used,
+    contextWindow: checkpoint.budget.total,
+  };
+  try {
+    await mkdir(contextDir, { recursive: true });
+    await writeFile(latestPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  } catch (err) {
+    console.warn(
+      `[pi-squad] Failed to write latest.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+// Issue 1: factory export so coordinator.ts can discover this via createRecoveryOrchestrator
+export function createRecoveryOrchestrator(stores: RecoveryStores): DefaultRecoveryOrchestrator {
+  return new DefaultRecoveryOrchestrator(stores);
 }
 

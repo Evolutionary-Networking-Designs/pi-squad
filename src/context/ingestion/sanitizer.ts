@@ -2,9 +2,10 @@
  * @module context/ingestion/sanitizer
  * Mandatory sanitization gate for all content entering the vector store.
  *
- * Two modes:
+ * Three modes:
  *   - 'document' (default): moderate — strips control chars, secrets, normalises Unicode
- *   - 'web': aggressive — superset of document, plus HTML stripping and prompt-injection detection
+ *   - 'prompt': document mode + role-boundary/system-token stripping for safe prompt assembly
+ *   - 'web': aggressive — superset of document, plus HTML stripping and tracking removal
  *
  * This module has zero external dependencies — pure TypeScript/stdlib only.
  *
@@ -16,12 +17,12 @@
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
-export type SourceType = 'document' | 'web';
+export type SourceType = 'document' | 'web' | 'prompt';
 
 export interface SanitizerOptions {
   /** Content origin — drives which rule set is applied. Default: 'document' */
   sourceType?: SourceType;
-  /** Hard truncation limit in characters. Default: 512_000 (document), 256_000 (web) */
+  /** Hard truncation limit in characters. Default: 512_000 (document/prompt), 256_000 (web) */
   maxLength?: number;
   /** Strip HTML tags. Auto-enabled for 'web'. Default: false */
   stripHtml?: boolean;
@@ -83,6 +84,7 @@ export function sanitize(text: string, options?: SanitizerOptions): SanitizeResu
   const sourceType: SourceType = options?.sourceType ?? 'document';
   const aggressive = options?.aggressiveMode ?? sourceType === 'web';
   const shouldStripHtml = options?.stripHtml ?? sourceType === 'web';
+  const stripRoleBoundaries = aggressive || sourceType === 'prompt';
   const defaultMax = sourceType === 'web' ? 256_000 : 512_000;
   const maxLength = options?.maxLength ?? defaultMax;
 
@@ -159,9 +161,9 @@ export function sanitize(text: string, options?: SanitizerOptions): SanitizeResu
     issues.push(`redacted ${secretCount} secret pattern(s)`);
   }
 
-  // ── Prompt injection (web mode) ───────────────────────────────────────────────
+  // ── Prompt injection (web + prompt mode) ─────────────────────────────────────
 
-  if (aggressive) {
+  if (stripRoleBoundaries) {
     for (const { pattern, label } of INJECTION_PATTERNS) {
       const before2 = out.length;
       out = out.replace(pattern, '');

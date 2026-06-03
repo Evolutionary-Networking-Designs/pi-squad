@@ -2,9 +2,10 @@
  * @module context/ingestion/sanitizer
  * Mandatory sanitization gate for all content entering the vector store.
  *
- * Two modes:
+ * Three modes:
  *   - 'document' (default): moderate — strips control chars, secrets, normalises Unicode
- *   - 'web': aggressive — superset of document, plus HTML stripping and prompt-injection detection
+ *   - 'prompt': document mode + role-boundary/system-token stripping for safe prompt assembly
+ *   - 'web': aggressive — superset of document, plus HTML stripping and tracking removal
  *
  * This module has zero external dependencies — pure TypeScript/stdlib only.
  *
@@ -50,6 +51,7 @@ export function sanitize(text, options) {
     const sourceType = options?.sourceType ?? 'document';
     const aggressive = options?.aggressiveMode ?? sourceType === 'web';
     const shouldStripHtml = options?.stripHtml ?? sourceType === 'web';
+    const stripRoleBoundaries = aggressive || sourceType === 'prompt';
     const defaultMax = sourceType === 'web' ? 256_000 : 512_000;
     const maxLength = options?.maxLength ?? defaultMax;
     const issues = [];
@@ -111,8 +113,8 @@ export function sanitize(text, options) {
     if (secretCount > 0) {
         issues.push(`redacted ${secretCount} secret pattern(s)`);
     }
-    // ── Prompt injection (web mode) ───────────────────────────────────────────────
-    if (aggressive) {
+    // ── Prompt injection (web + prompt mode) ─────────────────────────────────────
+    if (stripRoleBoundaries) {
         for (const { pattern, label } of INJECTION_PATTERNS) {
             const before2 = out.length;
             out = out.replace(pattern, '');

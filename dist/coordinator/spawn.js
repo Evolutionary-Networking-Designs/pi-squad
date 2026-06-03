@@ -35,4 +35,68 @@ export class SpawnError extends Error {
         Object.setPrototypeOf(this, SpawnError.prototype);
     }
 }
+const DEFAULT_SPAWN_TIMEOUT_MS = 120_000;
+function buildSpawnRequest(directive, ctx) {
+    return {
+        agentId: directive.agentId,
+        prompt: directive.prompt,
+        systemPrompt: directive.systemPrompt ?? "",
+        model: directive.model,
+        timeout: directive.timeoutMs ?? DEFAULT_SPAWN_TIMEOUT_MS,
+        sessionId: ctx.sessionId,
+    };
+}
+function buildSpawnPrompt(req) {
+    const systemSection = req.systemPrompt.trim();
+    if (systemSection.length === 0) {
+        return req.prompt;
+    }
+    return `${systemSection}\n\n---\n\n${req.prompt}`;
+}
+function hasExecApi(pi) {
+    return Boolean(pi && typeof pi.exec === "function");
+}
+export async function spawnSquadAgent(directive, ctx) {
+    const logger = ctx.logger ?? console;
+    const request = buildSpawnRequest(directive, {
+        sessionId: ctx.sessionId,
+        pi: "pi" in ctx ? ctx.pi : undefined,
+        cwd: ctx.cwd,
+        signal: ctx.signal,
+        logger,
+    });
+    const piCandidate = "pi" in ctx ? ctx.pi : undefined;
+    if (!hasExecApi(piCandidate)) {
+        logger.warn(`[pi-squad] Spawn API unavailable; skipped spawn for ${request.agentId}.`);
+        return {
+            kind: "noop",
+            request,
+            reason: "Pi ExtensionAPI exec() is unavailable in this runtime",
+        };
+    }
+    const pi = piCandidate;
+    const spawnedPrompt = buildSpawnPrompt(request);
+    const startedAt = Date.now();
+    const execResult = await pi.exec("pi", ["-p", spawnedPrompt], {
+        cwd: ctx.cwd,
+        timeout: request.timeout,
+        signal: ctx.signal,
+    });
+    const duration = Date.now() - startedAt;
+    const result = {
+        agentId: request.agentId,
+        output: execResult.stdout,
+        exitCode: execResult.code,
+        duration,
+        error: execResult.code === 0 ? undefined : execResult.stderr || "spawned process exited non-zero",
+    };
+    if (execResult.code !== 0) {
+        logger.warn(`[pi-squad] Spawned agent ${request.agentId} exited with code ${execResult.code}.`);
+    }
+    return {
+        kind: "spawned",
+        request,
+        result,
+    };
+}
 //# sourceMappingURL=spawn.js.map

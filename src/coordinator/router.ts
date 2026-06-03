@@ -11,6 +11,10 @@
  * §7.1 (custom agents).
  */
 
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+import { spawnSquadAgent, type SpawnExecutionResult } from "./spawn.js";
+
 // ─── Team Member ──────────────────────────────────────────────────────────────
 
 /**
@@ -244,4 +248,114 @@ export function routeWithEscalation(
   }
 
   return null;
+}
+
+// ─── Coordinator Directive Dispatch ────────────────────────────────────────────
+
+export type KnownDirectiveType = "agent_spawn" | "squad_update" | "direct_response" | "unknown";
+
+export interface AgentSpawnDirective {
+  readonly type: "agent_spawn";
+  readonly agentId: string;
+  readonly prompt: string;
+  readonly systemPrompt?: string;
+  readonly model?: "fast" | "balanced" | "capable";
+  readonly timeoutMs?: number;
+  readonly parentAgentId?: string;
+  readonly spawnPath?: readonly string[];
+}
+
+export interface SquadUpdateDirective {
+  readonly type: "squad_update";
+  readonly message: string;
+  readonly details?: string;
+}
+
+export interface DirectResponseDirective {
+  readonly type: "direct_response";
+  readonly message: string;
+}
+
+export interface UnknownDirective {
+  readonly type: "unknown";
+  readonly originalType?: string;
+  readonly payload?: unknown;
+}
+
+export type RouteDirective =
+  | AgentSpawnDirective
+  | SquadUpdateDirective
+  | DirectResponseDirective
+  | UnknownDirective;
+
+export type RouteDispatchStatus = "spawned" | "updated" | "responded" | "skipped";
+
+export interface RouteDispatchResult {
+  readonly directiveType: KnownDirectiveType;
+  readonly status: RouteDispatchStatus;
+  readonly message: string;
+  readonly spawn?: SpawnExecutionResult;
+}
+
+export interface RouteDispatchContext {
+  readonly pi: ExtensionAPI;
+  readonly sessionId: string;
+  readonly cwd?: string;
+  readonly signal?: AbortSignal;
+  readonly logger?: Pick<Console, "info" | "warn" | "debug" | "error">;
+}
+
+export class RouteDispatcher {
+  constructor(private readonly ctx: RouteDispatchContext) {}
+
+  async dispatch(directive: RouteDirective): Promise<RouteDispatchResult> {
+    const logger = this.ctx.logger ?? console;
+
+    switch (directive.type) {
+      case "agent_spawn": {
+        const spawnResult = await spawnSquadAgent(directive, this.ctx);
+        return {
+          directiveType: "agent_spawn",
+          status: spawnResult.kind === "spawned" ? "spawned" : "skipped",
+          message:
+            spawnResult.kind === "spawned"
+              ? `Spawned ${directive.agentId}`
+              : `Skipped spawn for ${directive.agentId}: ${spawnResult.reason}`,
+          spawn: spawnResult,
+        };
+      }
+      case "squad_update":
+        logger.info(`[pi-squad] squad_update: ${directive.message}`);
+        return {
+          directiveType: "squad_update",
+          status: "updated",
+          message: directive.message,
+        };
+      case "direct_response":
+        logger.info(`[pi-squad] direct_response: ${directive.message}`);
+        return {
+          directiveType: "direct_response",
+          status: "responded",
+          message: directive.message,
+        };
+      case "unknown":
+        logger.warn(
+          `[pi-squad] Unknown routing directive "${directive.originalType ?? "unknown"}"; skipping.`,
+        );
+        return {
+          directiveType: "unknown",
+          status: "skipped",
+          message: "Unknown directive skipped",
+        };
+      default: {
+        const exhaustiveCheck: never = directive;
+        logger.warn(`[pi-squad] Unhandled routing directive: ${String(exhaustiveCheck)}`);
+        return {
+          directiveType: "unknown",
+          status: "skipped",
+          message: "Unhandled directive skipped",
+        };
+      }
+    }
+  }
 }

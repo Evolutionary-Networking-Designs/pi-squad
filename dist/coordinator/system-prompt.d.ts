@@ -7,6 +7,8 @@ export declare const MAX_PROMPT_CHARS = 120000;
 export declare class SquadMissingError extends Error {
     constructor(filePath: string);
 }
+/** Rough token estimate: 1 token ≈ 4 chars for English text. */
+export declare function estimateTokens(charCount: number): number;
 export declare function getSystemPrompt(teamRoot: string): Promise<string>;
 export declare function loadCoordinatorPrompt(coordinator: Coordinator): Promise<string>;
 /**

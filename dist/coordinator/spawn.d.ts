@@ -11,6 +11,8 @@
  * Design reference: docs/ARCHITECTURE.md §4 (agent spawn), B5 research findings.
  * Implementation: Batou — these are interfaces only.
  */
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentSpawnDirective, RouteDispatchContext } from "./router.js";
 /** Abstract model tier mapped to concrete model IDs by the auth adapter. */
 export type ModelTier = "fast" | "balanced" | "capable";
 /**
@@ -104,4 +106,24 @@ export declare class SpawnError extends Error {
     /** Captured stderr from the failed process */
     stderr: string);
 }
+export interface SpawnedExecutionResult {
+    readonly kind: "spawned";
+    readonly request: SpawnRequest;
+    readonly result: SpawnResult;
+}
+export interface NoopSpawnResult {
+    readonly kind: "noop";
+    readonly request: SpawnRequest;
+    readonly reason: string;
+}
+export type SpawnExecutionResult = SpawnedExecutionResult | NoopSpawnResult;
+interface SpawnRuntimeContext {
+    readonly pi?: ExtensionAPI;
+    readonly cwd?: string;
+    readonly signal?: AbortSignal;
+    readonly logger?: Pick<Console, "info" | "warn" | "error" | "debug">;
+    readonly sessionId: string;
+}
+export declare function spawnSquadAgent(directive: AgentSpawnDirective, ctx: SpawnRuntimeContext | RouteDispatchContext): Promise<SpawnExecutionResult>;
+export {};
 //# sourceMappingURL=spawn.d.ts.map

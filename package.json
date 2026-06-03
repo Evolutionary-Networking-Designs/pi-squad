@@ -13,6 +13,7 @@
   },
   "files": [
     "dist/**/*",
+    "squad/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -31,7 +32,8 @@
   "author": "Evolutionary Networking Designs and contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Evolutionary-Networking-Designs/pi-squad.git"
+    "url": "https://github.com/KieraKujisawa/pi-squad.git",
+    "directory": "packages/coordinator"
   },
   "license": "MIT",
   "acknowledgements": [
@@ -62,7 +64,9 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "cp -r ../../squad ./squad && npm run build",
+    "postpublish": "rm -rf ./squad"
   },
   "squad": {
     "version": "0.9.4",

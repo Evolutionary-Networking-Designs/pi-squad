@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 import type { Coordinator } from "./coordinator.js";
+import { sanitize } from "../context/ingestion/sanitizer.js";
 
 const SQUAD_AGENT_MD = fileURLToPath(
   new URL("../../../../squad/.github/agents/squad.agent.md", import.meta.url),
@@ -54,6 +55,23 @@ async function readOptionalFile(filePath: string): Promise<string | null> {
     throw error;
   }
 }
+
+/** Rough token estimate: 1 token ≈ 4 chars for English text. */
+export function estimateTokens(charCount: number): number {
+  return Math.ceil(charCount / 4);
+}
+
+function validateTeamMd(content: string): { valid: boolean; warnings: string[] } {
+  const warnings: string[] = [];
+  if (!content.includes("## Members")) {
+    warnings.push("team.md is missing ## Members section — label routing may break");
+  }
+  if (!content.includes("|")) {
+    warnings.push("team.md has no table rows — team may be empty");
+  }
+  return { valid: warnings.length === 0, warnings };
+}
+
 
 function formatSection(title: string, content: string): string {
   return `---\n## ${title}\n${content.trim()}`;
@@ -161,6 +179,8 @@ function enforcePromptBudget(
     );
   }
 
+  console.debug(`[pi-squad] Coordinator prompt: ${prompt.length} chars (~${estimateTokens(prompt.length)} tokens)`);
+
   return prompt;
 }
 
@@ -184,22 +204,62 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
     readOptionalFile(decisionsPath),
   ]);
 
-  const stampedSquadAgent = squadVersion
-    ? squadAgent.replace(/0\.0\.0-source/g, squadVersion.trim())
-    : squadAgent;
+  const stampedSquadAgent = squadAgent.replace(
+    /0\.0\.0-source/g,
+    squadVersion ? squadVersion.trim() : "(version unknown)",
+  );
 
   const normalizedTeam = team?.trim() || null;
-  if (!normalizedTeam) {
+  const sanitizedTeam = normalizedTeam
+    ? (() => {
+        // Sanitize .squad/ content before injection — mitigates stored prompt injection
+        // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+        const result = sanitize(normalizedTeam, { sourceType: "prompt" });
+        if (result.issuesFound.length > 0) {
+          console.warn(`[pi-squad] Sanitizer: team.md: ${result.issuesFound.join(", ")}`);
+        }
+        return result.text;
+      })()
+    : null;
+  if (!sanitizedTeam) {
     console.warn("[pi-squad] Missing .squad/team.md; using minimal coordinator prompt.");
     return stampedSquadAgent.trim();
   }
 
+  const teamValidation = validateTeamMd(sanitizedTeam);
+  for (const warning of teamValidation.warnings) {
+    console.warn(`[pi-squad] team.md: ${warning}`);
+  }
+
+  const normalizedRouting = routing?.trim() || null;
+  const sanitizedRouting = normalizedRouting
+    ? (() => {
+        // Sanitize .squad/ content before injection — mitigates stored prompt injection
+        // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+        const result = sanitize(normalizedRouting, { sourceType: "prompt" });
+        if (result.issuesFound.length > 0) {
+          console.warn(`[pi-squad] Sanitizer: routing.md: ${result.issuesFound.join(", ")}`);
+        }
+        return result.text;
+      })()
+    : null;
   const normalizedDecisions = decisions?.trim() || null;
+  const sanitizedDecisions = normalizedDecisions
+    ? (() => {
+        // Sanitize .squad/ content before injection — mitigates stored prompt injection
+        // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+        const result = sanitize(normalizedDecisions, { sourceType: "prompt" });
+        if (result.issuesFound.length > 0) {
+          console.warn(`[pi-squad] Sanitizer: decisions.md: ${result.issuesFound.join(", ")}`);
+        }
+        return result.text;
+      })()
+    : null;
   return enforcePromptBudget(
     stampedSquadAgent,
-    normalizedTeam,
-    routing?.trim() || null,
-    normalizedDecisions && normalizedDecisions.length > 0 ? normalizedDecisions : null,
+    sanitizedTeam,
+    sanitizedRouting,
+    sanitizedDecisions && sanitizedDecisions.length > 0 ? sanitizedDecisions : null,
   );
 }
 
@@ -238,4 +298,3 @@ export async function buildSystemPrompt(
 
   return [initSkill.trim(), contextBlock, prompt].filter((section) => section.length > 0).join("\n\n");
 }
-

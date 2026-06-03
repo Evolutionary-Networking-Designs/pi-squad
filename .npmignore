@@ -1,0 +1,6 @@
+# Local dev artifacts — squad/ is copied by prepublishOnly, removed by postpublish
+node_modules/
+src/
+tsconfig.json
+vitest.config.ts
+**/*.test.ts

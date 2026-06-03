@@ -10,6 +10,7 @@
  * Design reference: docs/ARCHITECTURE.md §8, decisions.md "TypeScript-enforced
  * coordinator guardrails" directive.
  */
+import type { RouteDirective } from "./router.js";
 /**
  * Discriminated union of coordinator policy violation types.
  */
@@ -106,4 +107,26 @@ export interface CoordinatorGuard {
      */
     assertRequiresSpawn(action: string): void;
 }
+export type GuardViolationCode = "UNKNOWN_DIRECTIVE_TYPE" | "MISSING_REQUIRED_FIELD" | "CIRCULAR_SPAWN_REFERENCE" | "SCHEMA_CONSTRAINT_VIOLATION";
+export interface GuardViolation {
+    readonly code: GuardViolationCode;
+    readonly message: string;
+    readonly directiveType: string;
+    readonly field?: string;
+}
+type RouteDirectiveLike = {
+    type: string;
+} & Record<string, unknown>;
+export type GuardCheckResult = {
+    readonly ok: true;
+    readonly directive: RouteDirective;
+} | {
+    readonly ok: false;
+    readonly violation: GuardViolation;
+};
+export declare function truncateForLog(s: string, maxLen?: number): string;
+export declare class GuardChecker {
+    validate(directive: RouteDirectiveLike): GuardCheckResult;
+}
+export {};
 //# sourceMappingURL=guard.d.ts.map

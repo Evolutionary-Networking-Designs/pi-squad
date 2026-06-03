@@ -8,6 +8,72 @@ Multi-team coordinator for Pi agents. Embeds Squad's multi-agent coordination in
 npm install @pi-squad/coordinator
 ```
 
+## Setup
+
+After installing the package, you need to:
+
+### 1. Enable the extension in Pi
+
+Add `@pi-squad/coordinator` to your Pi configuration.
+
+Edit `~/.pi/config.json` (create if it doesn't exist):
+
+```json
+{
+  "extensions": ["@pi-squad/coordinator"]
+}
+```
+
+For more details on Pi configuration, see the [Pi CLI documentation](https://github.com/earendil-works/pi).
+
+### 2. Create your `.squad/` directory
+
+The coordinator requires a `.squad/` folder with at least two files: `team.md` (your team roster) and `routing.md` (dispatch rules).
+
+Create the folder in your project root:
+
+```bash
+mkdir -p .squad
+```
+
+**Minimum `team.md`** — Define your team members:
+
+```markdown
+# Team
+
+## Members
+- **coordinator** — orchestrator
+```
+
+**Minimum `routing.md`** — Define dispatch rules:
+
+```markdown
+# Routing
+
+## Rules
+- Default: coordinator
+```
+
+### 3. Initialize with `/squad-init` (optional)
+
+If starting fresh, you can scaffold `.squad/` interactively using Pi's `/squad-init` command:
+
+```bash
+pi
+# Inside Pi REPL:
+> /squad-init
+```
+
+This guided wizard will detect your git user, installed Pi extensions, and project signals to set up a sensible initial configuration.
+
+### 4. Verify it works
+
+Start Pi normally. The coordinator system prompt will be injected automatically at the beginning of each agent session. No additional commands are needed — it's automatic.
+
+```bash
+pi
+```
+
 ## Usage
 
 This package is a Pi CLI extension. It hooks the `before_agent_start` event to inject the Squad coordinator system prompt, and registers a `/squad` command for manual coordinator invocation.

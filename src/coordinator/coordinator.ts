@@ -13,7 +13,14 @@ import { ContextPressureLevel, type ContextBudget, type CoordinatorStateSnapshot
 import type { ContextAssessment } from "../context/monitor.js";
 import type { TeamStack } from "../types.js";
 import { checkCompatibility } from "../upstream/version.js";
+import { GuardChecker } from "./guard.js";
 import { getCompositeSystemPrompt } from "./composite-prompt.js";
+import {
+  RouteDispatcher,
+  type RouteDirective,
+  type RouteDispatchResult,
+  type UnknownDirective,
+} from "./router.js";
 import { MAX_PROMPT_CHARS, getSystemPrompt as loadSystemPrompt } from "./system-prompt.js";
 import { resolveTeamStack } from "./team-stack.js";
 
@@ -23,7 +30,7 @@ const SQUAD_AGENT_MD = fileURLToPath(
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
 const CHARS_PER_TOKEN = 4;
 
-type RecoveryStoreFactory = (squadPath: string) => unknown;
+type RecoveryStoreFactory = (squadPath: string) => Promise<unknown> | unknown;
 
 type RecoveryOrchestratorLike = {
   recover: (...args: unknown[]) => Promise<unknown>;
@@ -186,6 +193,83 @@ function buildCoordinatorStateSnapshot(stack: TeamStack): CoordinatorStateSnapsh
   };
 }
 
+type RouteContext = {
+  readonly sessionId: string;
+  readonly cwd?: string;
+  readonly signal?: AbortSignal;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function parseRouteDirective(message: string): RouteDirective {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return { type: "unknown", originalType: "empty", payload: { message } };
+  }
+
+  if (!trimmed.startsWith("{")) {
+    return { type: "direct_response", message: trimmed };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const record = asRecord(parsed);
+    if (!record || typeof record.type !== "string") {
+      return { type: "direct_response", message: trimmed };
+    }
+
+    if (record.type === "agent_spawn") {
+      const prompt = asOptionalString(record.prompt);
+      const agentId = asOptionalString(record.agentId);
+      return {
+        type: "agent_spawn",
+        prompt: prompt ?? "",
+        agentId: agentId ?? "",
+        model:
+          record.model === "fast" || record.model === "balanced" || record.model === "capable"
+            ? record.model
+            : undefined,
+        systemPrompt: asOptionalString(record.systemPrompt),
+        timeoutMs: typeof record.timeoutMs === "number" ? record.timeoutMs : undefined,
+        parentAgentId: asOptionalString(record.parentAgentId),
+        spawnPath: Array.isArray(record.spawnPath)
+          ? record.spawnPath.filter((entry): entry is string => typeof entry === "string")
+          : undefined,
+      };
+    }
+
+    if (record.type === "squad_update") {
+      return {
+        type: "squad_update",
+        message: asOptionalString(record.message) ?? "",
+        details: asOptionalString(record.details),
+      };
+    }
+
+    if (record.type === "direct_response") {
+      return {
+        type: "direct_response",
+        message: asOptionalString(record.message) ?? "",
+      };
+    }
+
+    const unknownDirective: UnknownDirective = {
+      type: "unknown",
+      originalType: record.type,
+      payload: record,
+    };
+    return unknownDirective;
+  } catch {
+    return { type: "direct_response", message: trimmed };
+  }
+}
+
 class CoordinatorImpl implements Coordinator {
   private _teamStack: TeamStack | null = null;
   private readonly monitor = new FallbackContextMonitor();
@@ -271,9 +355,62 @@ class CoordinatorImpl implements Coordinator {
     return this.initContext;
   }
 
-  async route(message: string, _ctx: unknown): Promise<void> {
+  async route(message: string, ctx: unknown): Promise<void> {
     const stack = await this.getTeamStack();
-    console.log(`[pi-squad] route (${stack.local.config.name}): ${message}`);
+    const routeContext = this.resolveRouteContext(ctx);
+    const rawDirective = parseRouteDirective(message);
+    const guard = new GuardChecker();
+    const checked = guard.validate(rawDirective as { type: string } & Record<string, unknown>);
+
+    if (!checked.ok) {
+      console.warn(
+        `[pi-squad] route guard violation (${checked.violation.code}): ${checked.violation.message}`,
+      );
+      this.emitRouteLifecycle("guard_violation", {
+        team: stack.local.config.name,
+        messageLength: message.length,
+        violationCode: checked.violation.code,
+        sessionId: routeContext.sessionId,
+      });
+      return;
+    }
+
+    this.emitRouteLifecycle("guard_passed", {
+      team: stack.local.config.name,
+      directiveType: checked.directive.type,
+      sessionId: routeContext.sessionId,
+    });
+
+    const dispatcher = new RouteDispatcher({
+      pi: this._pi,
+      sessionId: routeContext.sessionId,
+      cwd: routeContext.cwd,
+      signal: routeContext.signal,
+      logger: console,
+    });
+
+    let result: RouteDispatchResult;
+    try {
+      result = await dispatcher.dispatch(checked.directive);
+    } catch (error) {
+      console.warn(`[pi-squad] route dispatch failed: ${String(error)}`);
+      this.emitRouteLifecycle("dispatch_failed", {
+        team: stack.local.config.name,
+        directiveType: checked.directive.type,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorLength: error instanceof Error ? error.message.length : String(error).length,
+        sessionId: routeContext.sessionId,
+      });
+      return;
+    }
+
+    this.emitRouteLifecycle("dispatch_completed", {
+      team: stack.local.config.name,
+      directiveType: result.directiveType,
+      status: result.status,
+      resultLength: typeof result.message === "string" ? result.message.length : 0,
+      sessionId: routeContext.sessionId,
+    });
   }
 
   private async attemptRecovery(
@@ -298,8 +435,8 @@ class CoordinatorImpl implements Coordinator {
 
     const stack = await this.getTeamStack();
     const stores = {
-      root: createSessionStore(stack.root.squadPath),
-      local: stack.isSingleTeam ? undefined : createSessionStore(stack.local.squadPath),
+      root: await Promise.resolve(createSessionStore(stack.root.squadPath)),
+      local: stack.isSingleTeam ? undefined : await Promise.resolve(createSessionStore(stack.local.squadPath)),
     };
 
     try {
@@ -390,6 +527,33 @@ class CoordinatorImpl implements Coordinator {
     this.warnedFeatures.add(key);
     console.warn(message);
   }
+
+  private resolveRouteContext(ctx: unknown): RouteContext {
+    const record = asRecord(ctx);
+    const cwd = asOptionalString(record?.cwd);
+    const signal = record?.signal instanceof AbortSignal ? record.signal : undefined;
+    const sessionId =
+      asOptionalString(record?.sessionId) ??
+      asOptionalString(
+        asRecord(record?.sessionManager)?.activeSessionId ??
+          asRecord(record?.sessionManager)?.sessionId,
+      ) ??
+      `session-${Date.now()}`;
+
+    return { sessionId, cwd, signal };
+  }
+
+  private emitRouteLifecycle(stage: string, payload: Record<string, unknown>): void {
+    try {
+      this._pi.appendEntry("pi-squad.route.lifecycle", {
+        stage,
+        timestamp: new Date().toISOString(),
+        ...payload,
+      });
+    } catch {
+      // Ignore lifecycle emission failures.
+    }
+  }
 }
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
@@ -422,6 +586,20 @@ export async function initializeCoordinator(pi: ExtensionAPI): Promise<Coordinat
           console.warn(`[pi-squad] Squad version warning: ${result.reason}`);
         }
       }
+
+      // Issue 4: ensure knowledge dir exists and log any pending files
+      try {
+        const { initKnowledgeDir, scanKnowledgeDir } = await import("../context/ingestion/index.js");
+        initKnowledgeDir(teamRoot);
+        const pending = await scanKnowledgeDir(teamRoot);
+        if (pending.length > 0) {
+          console.log(
+            `[pi-squad] ${pending.length} file(s) pending ingestion in .squad/knowledge/ — run /squad-ingest to index them`,
+          );
+        }
+      } catch {
+        // Non-critical — ingestion is opportunistic
+      }
     }
   });
 
@@ -438,4 +616,3 @@ export async function initializeCoordinator(pi: ExtensionAPI): Promise<Coordinat
 
   return coordinator;
 }
-

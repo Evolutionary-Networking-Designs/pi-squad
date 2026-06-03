@@ -5,6 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { sanitize } from "../context/ingestion/sanitizer.js";
 import { MAX_PROMPT_CHARS } from "./system-prompt.js";
 const TEAM_FILENAME = "team.md";
 const DECISIONS_FILENAME = "decisions.md";
@@ -217,9 +218,75 @@ export async function getCompositeSystemPrompt(stack, agentMd, budgetChars = MAX
             ? Promise.resolve(null)
             : readOptionalFile(join(stack.local.squadPath, DECISIONS_FILENAME)),
     ]);
-    const normalizedRootTeam = normalizeContent(rootTeam);
-    const normalizedRootRouting = normalizeContent(rootRouting);
-    const normalizedRootDecisions = normalizeContent(rootDecisions);
+    const sanitizedRootTeam = rootTeam
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(rootTeam, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: root.team.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const sanitizedLocalTeam = localTeam
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(localTeam, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: local.team.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const sanitizedRootRouting = rootRouting
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(rootRouting, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: root.routing.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const sanitizedLocalRouting = localRouting
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(localRouting, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: local.routing.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const sanitizedRootDecisions = rootDecisions
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(rootDecisions, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: root.decisions.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const sanitizedLocalDecisions = localDecisions
+        ? (() => {
+            // Sanitize .squad/ content before injection — mitigates stored prompt injection
+            // via user-influenced agent writes (Aramaki Gap #1, 2026-06-03)
+            const result = sanitize(localDecisions, { sourceType: "prompt" });
+            if (result.issuesFound.length > 0) {
+                console.warn(`[pi-squad] Sanitizer: local.decisions.md: ${result.issuesFound.join(", ")}`);
+            }
+            return result.text;
+        })()
+        : null;
+    const normalizedRootTeam = normalizeContent(sanitizedRootTeam);
+    const normalizedRootRouting = normalizeContent(sanitizedRootRouting);
+    const normalizedRootDecisions = normalizeContent(sanitizedRootDecisions);
     if (stack.isSingleTeam) {
         const missingSections = [];
         if (!normalizeContent(agentMd)) {
@@ -237,7 +304,7 @@ export async function getCompositeSystemPrompt(stack, agentMd, budgetChars = MAX
         }
         return prompt;
     }
-    const sections = buildSections(stack, splitAgentMd(agentMd), normalizedRootTeam, normalizeContent(localTeam), normalizedRootRouting, normalizeContent(localRouting), normalizedRootDecisions, normalizeContent(localDecisions));
+    const sections = buildSections(stack, splitAgentMd(agentMd), normalizedRootTeam, normalizeContent(sanitizedLocalTeam), normalizedRootRouting, normalizeContent(sanitizedLocalRouting), normalizedRootDecisions, normalizeContent(sanitizedLocalDecisions));
     assertRequiredSectionsPresent(sections);
     const prompt = assemblePrompt(stack, enforcePromptBudget(stack, sections, budgetChars));
     if (prompt.length === 0) {

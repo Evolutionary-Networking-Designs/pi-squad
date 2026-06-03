@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.3] — 2026-06-04
+
+### Fixed
+- `MODEL_TIERS.codex.balanced` corrected from `gpt-5.2-codex` to `gpt-5.5` — matches Pi's default model at runtime
+
+---
+
 ## [0.1.2] — 2026-06-03
 
 ### Fixed

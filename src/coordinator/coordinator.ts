@@ -17,10 +17,12 @@ import { GuardChecker } from "./guard.js";
 import { getCompositeSystemPrompt } from "./composite-prompt.js";
 import {
   RouteDispatcher,
+  type DispatchTable,
   type RouteDirective,
   type RouteDispatchResult,
   type UnknownDirective,
 } from "./router.js";
+import { buildDispatchTable } from "../squad/dispatch-builder.js";
 import {
   MAX_PROMPT_CHARS,
   SquadMissingError,
@@ -120,6 +122,10 @@ export interface Coordinator {
   clearInitMode(): void;
   isInitMode(): boolean;
   getInitContext(): InitContext | null;
+  /** Build or return the cached dispatch table from .squad/ */
+  getDispatchTable(): Promise<DispatchTable>;
+  /** Clear dispatch table cache and rebuild from disk */
+  reloadDispatchTable(): Promise<DispatchTable>;
 }
 
 interface PackageSquadMeta {
@@ -186,12 +192,14 @@ async function loadRecoveryRuntime(): Promise<RecoveryRuntime> {
   }
 }
 
-function buildCoordinatorStateSnapshot(stack: TeamStack): CoordinatorStateSnapshot {
+function buildCoordinatorStateSnapshot(stack: TeamStack, dispatchTable?: DispatchTable): CoordinatorStateSnapshot {
   const activeAgents = Array.from(new Set([...stack.root.config.agents, ...stack.local.config.agents]));
 
   return {
     activeAgents,
-    routingDigest: stack.root.config.sourceHash,
+    // Prefer the dispatch table's sourceHash (covers team.md + routing.md content)
+    // over the stack config's sourceHash when the table is available.
+    routingDigest: dispatchTable?.sourceHash ?? stack.root.config.sourceHash,
     recentDecisionIds: [],
     activeWorkItems: [],
     historySummaries: [],
@@ -277,6 +285,7 @@ function parseRouteDirective(message: string): RouteDirective {
 
 class CoordinatorImpl implements Coordinator {
   private _teamStack: TeamStack | null = null;
+  private _dispatchTable: DispatchTable | null = null;
   private readonly monitor = new FallbackContextMonitor();
   private recoveryRuntimePromise: Promise<RecoveryRuntime> | null = null;
   private readonly warnedFeatures = new Set<string>();
@@ -294,6 +303,19 @@ class CoordinatorImpl implements Coordinator {
       this._teamStack = await resolveTeamStack();
     }
     return this._teamStack;
+  }
+
+  async getDispatchTable(): Promise<DispatchTable> {
+    if (!this._dispatchTable) {
+      const teamRoot = await this.getTeamRoot();
+      this._dispatchTable = await buildDispatchTable(teamRoot);
+    }
+    return this._dispatchTable;
+  }
+
+  async reloadDispatchTable(): Promise<DispatchTable> {
+    this._dispatchTable = null;
+    return this.getDispatchTable();
   }
 
   async getSystemPrompt(): Promise<string> {
@@ -504,7 +526,7 @@ class CoordinatorImpl implements Coordinator {
         teamRoot: stack.root.path,
         turnIndex: this.turnIndex,
         previousAttempts: orchestrator.getAttemptHistory?.() ?? [],
-        coordinatorState: buildCoordinatorStateSnapshot(stack),
+        coordinatorState: buildCoordinatorStateSnapshot(stack, this._dispatchTable ?? undefined),
         estimator: this.monitor.estimator,
       });
       return;
@@ -589,6 +611,9 @@ export async function initializeCoordinator(pi: ExtensionAPI): Promise<Coordinat
     } catch {
       // Non-critical — swallow monitoring errors
     }
+
+    // Uncomment to hot-reload dispatch table on each turn (useful during development):
+    // await coordinator.reloadDispatchTable();
   });
 
   pi.on("session_start", async (event) => {

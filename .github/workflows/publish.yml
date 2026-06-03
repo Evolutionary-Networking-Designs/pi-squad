@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
 
@@ -40,5 +40,5 @@ jobs:
           fi
           echo "✅ Tag matches package version: $PKG_VERSION"
 
-      - name: Publish
-        run: npm publish --ignore-scripts --provenance --access public
+      - name: Stage publish
+        run: npm stage publish --ignore-scripts --provenance --access public

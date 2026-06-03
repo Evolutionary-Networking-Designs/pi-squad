@@ -32,8 +32,7 @@
   "author": "Evolutionary Networking Designs and contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KieraKujisawa/pi-squad.git",
-    "directory": "packages/coordinator"
+    "url": "https://github.com/Evolutionary-Networking-Designs/pi-squad.git"
   },
   "license": "MIT",
   "acknowledgements": [

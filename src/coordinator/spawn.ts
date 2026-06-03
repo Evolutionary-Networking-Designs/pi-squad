@@ -29,7 +29,7 @@ export type ModelTier = "fast" | "balanced" | "capable";
 /** Inline tier→model mapping. Will be extracted to src/auth/adapter.ts in a future PR. */
 const MODEL_TIERS: Record<string, Record<ModelTier, string>> = {
   copilot:   { fast: "claude-haiku-4.5",  balanced: "claude-sonnet-4.6", capable: "claude-opus-4.5"  },
-  codex:     { fast: "gpt-5-mini",        balanced: "gpt-5.2-codex",     capable: "gpt-5.3-codex"    },
+  codex:     { fast: "gpt-5-mini",        balanced: "gpt-5.5",           capable: "gpt-5.3-codex"    },
   anthropic: { fast: "claude-haiku-4.5",  balanced: "claude-sonnet-4.6", capable: "claude-opus-4.5"  },
   ollama:    { fast: "llama3.2:3b",       balanced: "llama3.2:70b",      capable: "llama3.2:70b"      },
 };

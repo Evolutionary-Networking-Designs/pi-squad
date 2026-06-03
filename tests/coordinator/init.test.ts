@@ -37,12 +37,17 @@ describe('coordinator initialization', () => {
     expect(pi.handlers.get('session_before_compact')).toHaveLength(1);
   });
 
-  it('registers before_agent_start and squad commands through the extension entry point', async () => {
+  it('registers coordinator and Ralph hooks plus squad commands through the extension entry point', async () => {
     const pi = createPiStub();
 
     await initExtension(pi.api as never);
 
-    expect(pi.handlers.get('before_agent_start')).toHaveLength(1);
+    expect(pi.handlers.get('before_agent_start')).toHaveLength(2);
+    expect(pi.handlers.get('session_start')).toHaveLength(2);
+    expect(pi.handlers.get('agent_end')).toHaveLength(1);
+    expect(pi.handlers.get('turn_end')).toHaveLength(2);
+    expect(pi.handlers.get('session_before_compact')).toHaveLength(2);
+    expect(pi.handlers.get('session_shutdown')).toHaveLength(1);
     expect(pi.commands.has('squad')).toBe(true);
     expect(pi.commands.has('squad-update')).toBe(true);
   });
@@ -52,8 +57,14 @@ describe('coordinator initialization', () => {
 
     await initExtension(pi.api as never);
 
-    const handler = pi.handlers.get('before_agent_start')?.[0];
-    const result = await handler?.({ systemPrompt: 'Base system prompt' }, {});
+    const handlers = pi.handlers.get('before_agent_start') ?? [];
+    let result: unknown;
+    for (const handler of handlers) {
+      const nextResult = await handler({ systemPrompt: 'Base system prompt' }, {});
+      if (nextResult !== undefined) {
+        result = nextResult;
+      }
+    }
 
     expect(result).toMatchObject({
       systemPrompt: expect.stringContaining('Base system prompt'),

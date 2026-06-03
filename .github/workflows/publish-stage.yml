@@ -1,0 +1,37 @@
+name: Publish to npm (stage)
+
+on:
+  push:
+    tags:
+      - "v*-beta.*"
+      - "v*-next.*"
+      - "v*-rc.*"
+  workflow_dispatch:
+
+jobs:
+  publish-stage:
+    name: Build and publish (beta tag)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # for npm provenance
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish (beta)
+        run: npm publish --tag beta --ignore-scripts --provenance --access public

@@ -14,7 +14,8 @@
   "files": [
     "dist/**/*",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.0.0"
@@ -27,9 +28,10 @@
     "ai",
     "copilot"
   ],
+  "author": "Evolutionary Networking Designs and contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KieraKujisawa/pi-squad.git"
+    "url": "git+https://github.com/Evolutionary-Networking-Designs/pi-squad.git"
   },
   "license": "MIT",
   "acknowledgements": [

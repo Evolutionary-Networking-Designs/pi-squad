@@ -3,6 +3,7 @@ dist/
 
 # Dependencies
 node_modules/
+package-lock.json
 
 # Logs
 *.log
@@ -22,3 +23,13 @@ Thumbs.db
 .env
 .env.local
 .githooks/.boundary-terms
+
+# Local npm registry config (contains auth tokens)
+.npmrc
+<<<<<<< Updated upstream
+
+# Pi runtime artifacts
+.pi/todos/
+.fallow/
+=======
+>>>>>>> Stashed changes

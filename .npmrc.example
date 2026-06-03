@@ -1,0 +1,4 @@
+# Forgejo npm registry for @pi-squad packages (internal dev)
+# Copy to .npmrc and replace the token placeholder
+@pi-squad:registry=https://git.corp.meredithkm.info/api/packages/kiera/npm/
+//git.corp.meredithkm.info/api/packages/kiera/npm/:_authToken=YOUR_FORGEJO_TOKEN_HERE

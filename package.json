@@ -11,6 +11,27 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "pi",
+    "squad",
+    "multi-agent",
+    "coordinator",
+    "ai",
+    "copilot"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KieraKujisawa/pi-squad.git"
+  },
+  "license": "MIT",
   "pi": {
     "extensions": [
       "./dist/index.js"

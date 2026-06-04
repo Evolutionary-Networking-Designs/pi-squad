@@ -12,7 +12,7 @@ const testRoot = join(packageRoot, '.test-work', 'squad-init');
 const vendoredTemplateDirs = ['templates', '.squad-templates'] as const;
 
 async function readVendoredTemplate(name: string): Promise<string> {
-  // Squad submodule may be at the package root (community repo) or two levels up (sovereign monorepo)
+  // Squad submodule may be at the package root (community repo) or two levels up (host monorepo)
   const squadRootCandidates = [join(packageRoot, 'squad'), join(packageRoot, '..', '..', 'squad')];
 
   for (const squadRoot of squadRootCandidates) {

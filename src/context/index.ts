@@ -68,6 +68,15 @@ export type {
 
 // ─── Recovery (re-exported from recovery.ts) ──────────────────────────────────
 
+export {
+  DefaultRecoveryOrchestrator,
+  DefaultCheckpointStrategy,
+  DefaultGracefulDegradeStrategy,
+  DefaultSummarizeStrategy,
+  DefaultEscalateStrategy,
+  createRecoveryOrchestrator,
+} from "./recovery.js";
+
 export type {
   RecoveryStrategy,
   RecoveryOrchestrator,

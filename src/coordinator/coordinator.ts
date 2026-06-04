@@ -11,6 +11,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { ContextPressureLevel, type ContextBudget, type CoordinatorStateSnapshot, type TokenEstimator } from "../context/types.js";
 import type { ContextAssessment } from "../context/monitor.js";
+import { DefaultRecoveryOrchestrator, type RecoveryStores } from "../context/recovery.js";
+import { createSessionStore } from "../context/store.js";
+import { initKnowledgeDir, scanKnowledgeDir } from "../context/ingestion/index.js";
 import type { TeamStack } from "../types.js";
 import { checkCompatibility } from "../upstream/version.js";
 import { GuardChecker } from "./guard.js";
@@ -23,6 +26,8 @@ import {
   type UnknownDirective,
 } from "./router.js";
 import { buildDispatchTable } from "../squad/dispatch-builder.js";
+import { loadRegistryEntries, type RegistryEntry } from "../squad/registry-loader.js";
+import { spawnSquadAgent } from "./spawn.js";
 import {
   MAX_PROMPT_CHARS,
   SquadMissingError,
@@ -36,19 +41,6 @@ const SQUAD_AGENT_MD = fileURLToPath(
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
 const CHARS_PER_TOKEN = 4;
 
-type RecoveryStoreFactory = (squadPath: string) => Promise<unknown> | unknown;
-
-type RecoveryOrchestratorLike = {
-  recover: (...args: unknown[]) => Promise<unknown>;
-  getAttemptHistory?: () => readonly unknown[];
-};
-
-interface RecoveryRuntime {
-  readonly createSessionStore?: RecoveryStoreFactory;
-  readonly createStore?: RecoveryStoreFactory;
-  readonly RecoveryOrchestrator?: new (stores: unknown) => RecoveryOrchestratorLike;
-  readonly createRecoveryOrchestrator?: (...args: unknown[]) => RecoveryOrchestratorLike;
-}
 
 class CharApproxEstimator implements TokenEstimator {
   readonly method = "char-approx";
@@ -169,28 +161,6 @@ async function readAgentPrompt(): Promise<string> {
   return agentPrompt.trim();
 }
 
-async function loadRecoveryRuntime(): Promise<RecoveryRuntime> {
-  try {
-    const [recoveryModule, storeModule] = await Promise.all([
-      import("../context/recovery.js"),
-      import("../context/store.js"),
-    ]);
-
-    return {
-      RecoveryOrchestrator: (recoveryModule as RecoveryRuntime).RecoveryOrchestrator,
-      createRecoveryOrchestrator: (recoveryModule as RecoveryRuntime).createRecoveryOrchestrator,
-      createSessionStore: (storeModule as RecoveryRuntime).createSessionStore,
-      createStore: (storeModule as RecoveryRuntime).createStore,
-    };
-  } catch (error) {
-    console.warn(
-      `[pi-squad] Context recovery modules unavailable; continuing without recovery orchestration. ${String(
-        error,
-      )}`,
-    );
-    return {};
-  }
-}
 
 function buildCoordinatorStateSnapshot(stack: TeamStack, dispatchTable?: DispatchTable): CoordinatorStateSnapshot {
   const activeAgents = Array.from(new Set([...stack.root.config.agents, ...stack.local.config.agents]));
@@ -286,8 +256,8 @@ function parseRouteDirective(message: string): RouteDirective {
 class CoordinatorImpl implements Coordinator {
   private _teamStack: TeamStack | null = null;
   private _dispatchTable: DispatchTable | null = null;
+  private _registryEntries: readonly RegistryEntry[] | null = null;
   private readonly monitor = new FallbackContextMonitor();
-  private recoveryRuntimePromise: Promise<RecoveryRuntime> | null = null;
   private readonly warnedFeatures = new Set<string>();
   private turnIndex = 0;
   private initContext: InitContext | null = null;
@@ -308,13 +278,14 @@ class CoordinatorImpl implements Coordinator {
   async getDispatchTable(): Promise<DispatchTable> {
     if (!this._dispatchTable) {
       const teamRoot = await this.getTeamRoot();
-      this._dispatchTable = await buildDispatchTable(teamRoot);
+      this._dispatchTable = await buildDispatchTable(teamRoot, await this.getRegistryEntries());
     }
     return this._dispatchTable;
   }
 
   async reloadDispatchTable(): Promise<DispatchTable> {
     this._dispatchTable = null;
+    this._registryEntries = null;
     return this.getDispatchTable();
   }
 
@@ -394,8 +365,27 @@ class CoordinatorImpl implements Coordinator {
     return this.initContext;
   }
 
+  private async getRegistryEntries(): Promise<readonly RegistryEntry[]> {
+    if (!this._registryEntries) {
+      this._registryEntries = await loadRegistryEntries(await this.getTeamRoot());
+    }
+    return this._registryEntries;
+  }
+
+  private getPreSpawnGuardMessage(agentId: string, dispatchTable: DispatchTable): string | null {
+    if (!dispatchTable.members.has(agentId)) {
+      return `Agent '${agentId}' not found in the Squad roster. Please reassess the dispatch target.`;
+    }
+
+    const budget = this.monitor.getLastBudget();
+    if (budget?.pressureLevel === ContextPressureLevel.OVERFLOW) {
+      return `Context overflow detected before spawning '${agentId}'. Reassess or compact context before dispatching more work.`;
+    }
+
+    return null;
+  }
+
   async route(message: string, ctx: unknown): Promise<void> {
-    const stack = await this.getTeamStack();
     const routeContext = this.resolveRouteContext(ctx);
     const rawDirective = parseRouteDirective(message);
     const guard = new GuardChecker();
@@ -406,13 +396,14 @@ class CoordinatorImpl implements Coordinator {
         `[pi-squad] route guard violation (${checked.violation.code}): ${checked.violation.message}`,
       );
       this.emitRouteLifecycle("guard_violation", {
-        team: stack.local.config.name,
         messageLength: message.length,
         violationCode: checked.violation.code,
         sessionId: routeContext.sessionId,
       });
       return;
     }
+
+    const stack = await this.getTeamStack();
 
     this.emitRouteLifecycle("guard_passed", {
       team: stack.local.config.name,
@@ -430,7 +421,45 @@ class CoordinatorImpl implements Coordinator {
 
     let result: RouteDispatchResult;
     try {
-      result = await dispatcher.dispatch(checked.directive);
+      if (checked.directive.type === "agent_spawn") {
+        const dispatchTable = await this.getDispatchTable();
+        const guardMessage = this.getPreSpawnGuardMessage(checked.directive.agentId, dispatchTable);
+        if (guardMessage) {
+          result = await dispatcher.dispatch({
+            type: "direct_response",
+            message: guardMessage,
+          });
+        } else {
+          const member = dispatchTable.members.get(checked.directive.agentId);
+          const spawnResult = await spawnSquadAgent(checked.directive, {
+            pi: this._pi,
+            sessionId: routeContext.sessionId,
+            cwd: routeContext.cwd,
+            signal: routeContext.signal,
+            logger: console,
+            resolvedAgent: member,
+          });
+
+          if (spawnResult.kind === "reassess") {
+            result = await dispatcher.dispatch({
+              type: "direct_response",
+              message: spawnResult.reason,
+            });
+          } else {
+            result = {
+              directiveType: "agent_spawn",
+              status: spawnResult.kind === "spawned" ? "spawned" : "skipped",
+              message:
+                spawnResult.kind === "spawned"
+                  ? `Spawned ${checked.directive.agentId}`
+                  : `Skipped spawn for ${checked.directive.agentId}: ${spawnResult.reason}`,
+              spawn: spawnResult,
+            };
+          }
+        }
+      } else {
+        result = await dispatcher.dispatch(checked.directive);
+      }
     } catch (error) {
       console.warn(`[pi-squad] route dispatch failed: ${String(error)}`);
       this.emitRouteLifecycle("dispatch_failed", {
@@ -457,105 +486,51 @@ class CoordinatorImpl implements Coordinator {
     content: string,
     history: readonly string[],
   ): Promise<void> {
-    const runtime = await this.getRecoveryRuntime();
-    const createSessionStore = runtime.createSessionStore ?? runtime.createStore;
-
-    if (!createSessionStore) {
-      this.warnOnce(
-        "create-session-store",
-        "[pi-squad] Context recovery store unavailable; skipping recovery orchestration.",
-      );
-      return;
-    }
-
     if (!assessment.triggerLevel) {
       return;
     }
 
     const stack = await this.getTeamStack();
-    const stores = {
-      root: await Promise.resolve(createSessionStore(stack.root.squadPath)),
-      local: stack.isSingleTeam ? undefined : await Promise.resolve(createSessionStore(stack.local.squadPath)),
+    const stores: RecoveryStores = {
+      root: await createSessionStore(stack.root.squadPath),
+      local: stack.isSingleTeam ? undefined : await createSessionStore(stack.local.squadPath),
     };
 
     try {
-      if (typeof runtime.RecoveryOrchestrator === "function") {
-        await this.invokeRecovery(
-          new runtime.RecoveryOrchestrator(stores),
-          assessment,
-          content,
-          history,
-          stack,
-        );
-        return;
-      }
-
-      const orchestrator = await this.createRecoveryOrchestrator(runtime, stores);
-      if (orchestrator) {
-        await this.invokeRecovery(orchestrator, assessment, content, history, stack);
-        return;
-      }
+      await this.invokeRecovery(
+        new DefaultRecoveryOrchestrator(stores),
+        assessment,
+        content,
+        history,
+        stack,
+      );
     } catch (error) {
       this.warnOnce(
         "recovery-failed",
         `[pi-squad] Context recovery failed; continuing with current prompt. ${String(error)}`,
       );
-      return;
     }
-
-    this.warnOnce(
-      "recovery-runtime",
-      "[pi-squad] RecoveryOrchestrator runtime unavailable; context recovery remains disabled.",
-    );
   }
 
   private async invokeRecovery(
-    orchestrator: RecoveryOrchestratorLike,
+    orchestrator: DefaultRecoveryOrchestrator,
     assessment: ContextAssessment,
-    content: string,
-    history: readonly string[],
+    _content: string,
+    _history: readonly string[],
     stack: TeamStack,
   ): Promise<void> {
     if (!assessment.triggerLevel) {
       return;
     }
 
-    if (orchestrator.recover.length >= 2) {
-      await orchestrator.recover(assessment.triggerLevel, {
-        budget: assessment.budget,
-        teamRoot: stack.root.path,
-        turnIndex: this.turnIndex,
-        previousAttempts: orchestrator.getAttemptHistory?.() ?? [],
-        coordinatorState: buildCoordinatorStateSnapshot(stack, this._dispatchTable ?? undefined),
-        estimator: this.monitor.estimator,
-      });
-      return;
-    }
-
-    await orchestrator.recover({
-      currentPrompt: content,
-      history: [...history],
+    await orchestrator.recover(assessment.triggerLevel, {
       budget: assessment.budget,
-      teamStack: stack,
+      teamRoot: stack.root.squadPath,
+      turnIndex: this.turnIndex,
+      previousAttempts: orchestrator.getAttemptHistory(),
+      coordinatorState: buildCoordinatorStateSnapshot(stack, this._dispatchTable ?? undefined),
+      estimator: this.monitor.estimator,
     });
-  }
-
-  private async createRecoveryOrchestrator(
-    runtime: RecoveryRuntime,
-    stores: { root: unknown; local: unknown | undefined },
-  ): Promise<RecoveryOrchestratorLike | null> {
-    if (typeof runtime.createRecoveryOrchestrator === "function") {
-      return runtime.createRecoveryOrchestrator(stores);
-    }
-
-    return null;
-  }
-
-  private async getRecoveryRuntime(): Promise<RecoveryRuntime> {
-    if (!this.recoveryRuntimePromise) {
-      this.recoveryRuntimePromise = loadRecoveryRuntime();
-    }
-    return this.recoveryRuntimePromise;
   }
 
   private warnOnce(key: string, message: string): void {
@@ -631,7 +606,6 @@ export async function initializeCoordinator(pi: ExtensionAPI): Promise<Coordinat
 
       // Issue 4: ensure knowledge dir exists and log any pending files
       try {
-        const { initKnowledgeDir, scanKnowledgeDir } = await import("../context/ingestion/index.js");
         initKnowledgeDir(teamRoot);
         const pending = await scanKnowledgeDir(teamRoot);
         if (pending.length > 0) {

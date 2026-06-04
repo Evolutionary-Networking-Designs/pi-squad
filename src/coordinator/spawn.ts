@@ -12,9 +12,8 @@
  * Implementation: Batou — these are interfaces only.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -65,6 +64,8 @@ export interface SpawnRequest {
   readonly prompt: string;
   /** System prompt injected into the child agent's context */
   readonly systemPrompt: string;
+  /** Resolved pi-subagents built-in backing this Squad persona */
+  readonly piBuiltin?: string;
   /** Model tier for this dispatch (resolved to concrete model by auth adapter) */
   readonly model?: ModelTier;
   /** Maximum execution time in milliseconds before the process is killed */
@@ -172,7 +173,21 @@ export interface NoopSpawnResult {
   readonly reason: string;
 }
 
-export type SpawnExecutionResult = SpawnedExecutionResult | NoopSpawnResult;
+export interface CharterRejectDirective {
+  readonly type: "charter_reject";
+  readonly agentId: string;
+  readonly reason: string;
+  readonly suggestedAgent?: string;
+}
+
+export interface ReassessmentSpawnResult {
+  readonly kind: "reassess";
+  readonly request: SpawnRequest;
+  readonly directive: CharterRejectDirective;
+  readonly reason: string;
+}
+
+export type SpawnExecutionResult = SpawnedExecutionResult | NoopSpawnResult | ReassessmentSpawnResult;
 
 interface SpawnRuntimeContext {
   readonly pi?: ExtensionAPI;
@@ -182,39 +197,78 @@ interface SpawnRuntimeContext {
   readonly sessionId: string;
 }
 
+interface ResolvedSquadAgent {
+  readonly piBuiltin?: string;
+}
+
+interface PromptArtifact {
+  readonly dirPath: string;
+  readonly filePath: string;
+}
+
 const DEFAULT_SPAWN_TIMEOUT_MS = 120_000;
 
-function buildSpawnRequest(directive: AgentSpawnDirective, ctx: SpawnRuntimeContext): SpawnRequest {
+function buildSpawnRequest(
+  directive: AgentSpawnDirective,
+  ctx: SpawnRuntimeContext,
+  resolvedAgent?: ResolvedSquadAgent,
+): SpawnRequest {
   return {
     agentId: directive.agentId,
     prompt: directive.prompt,
     systemPrompt: directive.systemPrompt ?? "",
+    piBuiltin: resolvedAgent?.piBuiltin,
     model: directive.model,
     timeout: directive.timeoutMs ?? DEFAULT_SPAWN_TIMEOUT_MS,
     sessionId: ctx.sessionId,
   };
 }
 
-async function writeSystemPromptFile(req: SpawnRequest): Promise<string | null> {
+function safePathSegment(value: string): string {
+  return value.replace(/[^a-z0-9_-]/giu, "_");
+}
+
+function buildBuiltinOverlay(req: SpawnRequest): string | null {
+  if (!req.piBuiltin) {
+    return null;
+  }
+
+  return [
+    "## Execution Layer",
+    `Run this Squad assignment through the pi-subagents built-in \`${req.piBuiltin}\` execution path.`,
+    "Preserve the Squad persona and charter as the authoritative identity context.",
+  ].join("\n");
+}
+
+function composeSystemPrompt(req: SpawnRequest, charter: string | null): string {
+  return [charter?.trim(), buildBuiltinOverlay(req), req.systemPrompt.trim()]
+    .filter((section): section is string => typeof section === "string" && section.length > 0)
+    .join("\n\n");
+}
+
+async function writeSystemPromptFile(req: SpawnRequest, baseDir: string | undefined): Promise<PromptArtifact | null> {
   const systemPrompt = req.systemPrompt.trim();
   if (systemPrompt.length === 0) {
     return null;
   }
 
-  const dir = await mkdtemp(join(tmpdir(), "pi-squad-agent-"));
-  const filePath = join(dir, `${req.agentId.replace(/[^a-z0-9_-]/giu, "_")}-system.md`);
+  const rootDir = join(baseDir ?? process.cwd(), ".pi-squad-runtime", "spawn-prompts");
+  const dirPath = join(
+    rootDir,
+    `${safePathSegment(req.sessionId)}-${Date.now()}-${process.pid}`,
+  );
+  const filePath = join(dirPath, `${safePathSegment(req.agentId)}-system.md`);
+  await mkdir(dirPath, { recursive: true });
   await writeFile(filePath, systemPrompt, { encoding: "utf8", mode: 0o600 });
-  return filePath;
+  return { dirPath, filePath };
 }
 
-async function cleanupSystemPromptFile(filePath: string | null): Promise<void> {
-  if (!filePath) {
+async function cleanupSystemPromptFile(artifact: PromptArtifact | null): Promise<void> {
+  if (!artifact) {
     return;
   }
 
-  const dir = dirname(filePath);
-  await rm(filePath, { force: true });
-  await rm(dir, { force: true, recursive: true });
+  await rm(artifact.dirPath, { force: true, recursive: true });
 }
 
 async function loadCharterContent(agentId: string, cwd: string | undefined): Promise<string | null> {
@@ -227,13 +281,83 @@ async function loadCharterContent(agentId: string, cwd: string | undefined): Pro
   }
 }
 
+function parseCharterRejectDirective(value: unknown): CharterRejectDirective | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    record.type === "charter_reject" &&
+    typeof record.agentId === "string" &&
+    typeof record.reason === "string"
+  ) {
+    return {
+      type: "charter_reject",
+      agentId: record.agentId,
+      reason: record.reason,
+      suggestedAgent: typeof record.suggestedAgent === "string" ? record.suggestedAgent : undefined,
+    };
+  }
+
+  if (Array.isArray(record.content)) {
+    for (const item of record.content) {
+      const nested = parseCharterRejectDirective(item);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  if (typeof record.text === "string") {
+    try {
+      return parseCharterRejectDirective(JSON.parse(record.text));
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof record.message === "object" && record.message !== null) {
+    return parseCharterRejectDirective(record.message);
+  }
+
+  return null;
+}
+
+function findCharterReject(output: string): CharterRejectDirective | null {
+  for (const line of output.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const directive = parseCharterRejectDirective(parsed);
+      if (directive) {
+        return directive;
+      }
+    } catch {
+      // Ignore non-JSON lines in mixed output.
+    }
+  }
+
+  return null;
+}
+
+function formatReassessmentMessage(directive: CharterRejectDirective): string {
+  return directive.suggestedAgent
+    ? `Agent '${directive.agentId}' rejected the task: ${directive.reason} Reassess and consider '${directive.suggestedAgent}'.`
+    : `Agent '${directive.agentId}' rejected the task: ${directive.reason} Reassess the dispatch target.`;
+}
+
 function hasExecApi(pi: ExtensionAPI | undefined): pi is ExtensionAPI {
   return Boolean(pi && typeof pi.exec === "function");
 }
 
 export async function spawnSquadAgent(
   directive: AgentSpawnDirective,
-  ctx: SpawnRuntimeContext | RouteDispatchContext,
+  ctx: (SpawnRuntimeContext | RouteDispatchContext) & { readonly resolvedAgent?: ResolvedSquadAgent },
 ): Promise<SpawnExecutionResult> {
   const logger = ctx.logger ?? console;
   const request = buildSpawnRequest(directive, {
@@ -242,7 +366,7 @@ export async function spawnSquadAgent(
     cwd: ctx.cwd,
     signal: ctx.signal,
     logger,
-  });
+  }, ctx.resolvedAgent);
 
   const piCandidate = "pi" in ctx ? ctx.pi : undefined;
   if (!hasExecApi(piCandidate)) {
@@ -256,28 +380,22 @@ export async function spawnSquadAgent(
 
   const pi = piCandidate;
 
-  // P2: load charter and merge into system prompt so agents always have identity context
   const charter = await loadCharterContent(request.agentId, ctx.cwd);
-  const amendedRequest: SpawnRequest = charter
-    ? {
-        ...request,
-        systemPrompt: request.systemPrompt.trim().length === 0
-          ? charter
-          : `${charter}\n\n${request.systemPrompt}`,
-      }
-    : request;
+  const amendedRequest: SpawnRequest = {
+    ...request,
+    systemPrompt: composeSystemPrompt(request, charter),
+  };
 
-  const systemPromptFile = await writeSystemPromptFile(amendedRequest);
-  const args = ["--no-extensions", "--mode", "json", "--no-session"];
+  const systemPromptFile = await writeSystemPromptFile(amendedRequest, ctx.cwd);
+  const args = ["--mode", "json", "--no-session"];
 
-  // P1: resolve model tier to concrete model ID for the child process
   if (amendedRequest.model) {
     const modelId = resolveModelId(amendedRequest.model, pi);
     args.push("--model", modelId);
   }
 
   if (systemPromptFile) {
-    args.push("--append-system-prompt", systemPromptFile);
+    args.push("--append-system-prompt", systemPromptFile.filePath);
   }
   args.push("-p", amendedRequest.prompt);
 
@@ -291,6 +409,16 @@ export async function spawnSquadAgent(
     });
   } finally {
     await cleanupSystemPromptFile(systemPromptFile);
+  }
+
+  const charterReject = findCharterReject(execResult.stdout);
+  if (charterReject) {
+    return {
+      kind: "reassess",
+      request: amendedRequest,
+      directive: charterReject,
+      reason: formatReassessmentMessage(charterReject),
+    };
   }
 
   const duration = Date.now() - startedAt;
@@ -375,7 +503,7 @@ export function registerSquadDispatchTool(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Use squad_dispatch for any task that needs a Squad specialist; the coordinator routes and synthesizes, it does not implement inline.",
       "Pass the lowercase agent id in agentId and include the full agent task in prompt.",
-      "Use --no-extensions child isolation is handled by the tool; do not ask the child agent to route again.",
+      "squad_dispatch preserves Squad identity and charter context while delegating execution to the child Pi runtime; do not call subagent directly when a Squad persona is required.",
     ],
     parameters: SquadDispatchParams as never,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -413,6 +541,13 @@ export function registerSquadDispatchTool(pi: ExtensionAPI): void {
       if (result.kind === "noop") {
         return {
           content: [{ type: "text", text: `Could not dispatch ${typed.agentId}: ${result.reason}` }],
+          details: { ok: false, ...result },
+        };
+      }
+
+      if (result.kind === "reassess") {
+        return {
+          content: [{ type: "text", text: result.reason }],
           details: { ok: false, ...result },
         };
       }

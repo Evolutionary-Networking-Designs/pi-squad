@@ -187,5 +187,17 @@ describe("context recovery", () => {
       checksum: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
     });
     expect(checkpoint.id).toBe(checkpoint.createdAt);
+
+    const [latestPath, rawLatestCheckpoint, latestEncoding] = writeFileMock.mock.calls[1] ?? [];
+    expect(String(latestPath)).toBe("/repo/.squad/checkpoints/latest.json");
+    expect(latestEncoding).toBe("utf8");
+    expect(JSON.parse(String(rawLatestCheckpoint).trim())).toEqual({
+      checkpointId: checkpoint.id,
+      createdAt: checkpoint.createdAt,
+      turnIndex: 12,
+      pressureLevel: ContextPressureLevel.CRITICAL,
+      tokenCount: 95,
+      contextWindow: 100,
+    });
   });
 });

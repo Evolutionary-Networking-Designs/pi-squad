@@ -8,16 +8,21 @@ type Handler = (...args: unknown[]) => unknown;
 function createPiStub() {
   const handlers = new Map<string, Handler[]>();
   const commands = new Map<string, { description: string; handler: Handler }>();
+  const entries: Array<{ key: string; value: unknown }> = [];
 
   return {
     handlers,
     commands,
+    entries,
     api: {
       on(event: string, handler: Handler) {
         handlers.set(event, [...(handlers.get(event) ?? []), handler]);
       },
       registerCommand(name: string, command: { description: string; handler: Handler }) {
         commands.set(name, command);
+      },
+      appendEntry(key: string, value: unknown) {
+        entries.push({ key, value });
       },
     },
   };
@@ -73,5 +78,23 @@ describe('coordinator initialization', () => {
     expect((result as { systemPrompt: string }).systemPrompt).toContain('Squad Coordinator');
   });
 
-  test.todo('wires the visibility boundary and coordinator guardrails into runtime enforcement');
+  it('wires the visibility boundary and coordinator guardrails into runtime enforcement', async () => {
+    const pi = createPiStub();
+    const coordinator = await initializeCoordinator(pi.api as never);
+
+    await expect(coordinator.route('{"type":"agent_spawn"}', { sessionId: 'guard-test' })).resolves
+      .toBeUndefined();
+    expect(pi.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'pi-squad.route.lifecycle',
+          value: expect.objectContaining({
+            stage: 'guard_violation',
+            violationCode: 'MISSING_REQUIRED_FIELD',
+            sessionId: 'guard-test',
+          }),
+        }),
+      ]),
+    );
+  });
 });

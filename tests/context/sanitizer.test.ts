@@ -56,5 +56,12 @@ describe('sanitize', () => {
     expect(() => sanitize('plain text', { sourceType })).not.toThrow();
   });
 
-  it.todo('guards null or undefined runtime inputs if callers ever bypass the string type contract');
+  it('guards null or undefined runtime inputs if callers ever bypass the string type contract', () => {
+    const expected = { text: '', truncated: false, issuesFound: [] };
+
+    expect(() => sanitize(null as unknown as string)).not.toThrow();
+    expect(() => sanitize(undefined as unknown as string)).not.toThrow();
+    expect(sanitize(null as unknown as string)).toEqual(expected);
+    expect(sanitize(undefined as unknown as string)).toEqual(expected);
+  });
 });

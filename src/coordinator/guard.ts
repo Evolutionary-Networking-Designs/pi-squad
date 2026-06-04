@@ -287,7 +287,10 @@ export class GuardChecker {
       }
 
       // Mitigates runaway/liveness abuse by bounding timeouts to sane finite integer values.
-      if (Object.prototype.hasOwnProperty.call(directive, "timeoutMs")) {
+      if (
+        Object.prototype.hasOwnProperty.call(directive, "timeoutMs") &&
+        directive.timeoutMs !== undefined
+      ) {
         const timeoutMs = directive.timeoutMs;
         if (
           typeof timeoutMs !== "number" ||

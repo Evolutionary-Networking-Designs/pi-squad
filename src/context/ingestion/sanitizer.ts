@@ -90,9 +90,10 @@ export function sanitize(text: string, options?: SanitizerOptions): SanitizeResu
   const stripRoleBoundaries = aggressive || sourceType === 'prompt';
   const defaultMax = sourceType === 'web' ? 256_000 : 512_000;
   const maxLength = options?.maxLength ?? defaultMax;
+  const input = text == null ? '' : text;
 
   const issues: string[] = [];
-  let out = text;
+  let out = input;
 
   // ── Web-only pre-pass: remove script/style blocks before any other stripping ──
 

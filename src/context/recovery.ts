@@ -629,7 +629,7 @@ export class DefaultCheckpointStrategy {
       await writeFile(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
 
       // Issue 3: write latest.json for crash recovery
-      await writeLatestJson(ctx, checkpoint);
+      await writeLatestJson(ctx, checkpoint, this.config.checkpointDir);
 
       return {
         success: true,
@@ -804,9 +804,13 @@ function createEmptyBudget(): ContextBudget {
 }
 
 // Issue 3: lightweight latest.json written to .squad/context/ for crash recovery
-async function writeLatestJson(ctx: RecoveryContext, checkpoint: ContextCheckpoint): Promise<void> {
-  const contextDir = join(ctx.teamRoot, ".squad", "context");
-  const latestPath = join(contextDir, "latest.json");
+async function writeLatestJson(
+  ctx: RecoveryContext,
+  checkpoint: ContextCheckpoint,
+  checkpointDirName: string,
+): Promise<void> {
+  const checkpointDir = join(ctx.teamRoot, checkpointDirName);
+  const latestPath = join(checkpointDir, "latest.json");
   const snapshot = {
     checkpointId: checkpoint.id,
     createdAt: checkpoint.createdAt,
@@ -816,7 +820,7 @@ async function writeLatestJson(ctx: RecoveryContext, checkpoint: ContextCheckpoi
     contextWindow: checkpoint.budget.total,
   };
   try {
-    await mkdir(contextDir, { recursive: true });
+    await mkdir(checkpointDir, { recursive: true });
     await writeFile(latestPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
   } catch (err) {
     console.warn(

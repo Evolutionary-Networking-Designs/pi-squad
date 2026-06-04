@@ -11,7 +11,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { DispatchTable } from "../coordinator/router.js";
+import type { DispatchTable, TeamMember } from "../coordinator/router.js";
+import type { RegistryEntry } from "./registry-loader.js";
 import { loadTeamMembers } from "./team-loader.js";
 import { loadRoutingRules } from "./routing.js";
 
@@ -28,6 +29,31 @@ async function readFileSafe(filePath: string): Promise<string> {
   }
 }
 
+function mergeRegistryMembers(
+  members: readonly TeamMember[],
+  registryEntries: readonly RegistryEntry[],
+): readonly TeamMember[] {
+  if (registryEntries.length === 0) {
+    return members;
+  }
+
+  const registryById = new Map(
+    registryEntries.map((entry) => [entry.persistentName.toLowerCase(), entry]),
+  );
+
+  return members.map((member) => {
+    const entry = registryById.get(member.id);
+    if (entry?.piBuiltin === undefined) {
+      return member;
+    }
+
+    return {
+      ...member,
+      piBuiltin: entry.piBuiltin,
+    };
+  });
+}
+
 /**
  * Build a DispatchTable from a .squad/ directory.
  *
@@ -36,8 +62,13 @@ async function readFileSafe(filePath: string): Promise<string> {
  *
  * @param squadRoot - The directory containing the `.squad/` folder (i.e. the
  *   team root path returned by `getTeamRoot()`).
+ * @param registryEntries - Optional casting registry entries used to enrich
+ *   team members with pi-subagents built-in execution mappings.
  */
-export async function buildDispatchTable(squadRoot: string): Promise<DispatchTable> {
+export async function buildDispatchTable(
+  squadRoot: string,
+  registryEntries: readonly RegistryEntry[] = [],
+): Promise<DispatchTable> {
   const teamMdPath = join(squadRoot, ".squad", "team.md");
   const routingMdPath = join(squadRoot, ".squad", "routing.md");
 
@@ -47,6 +78,7 @@ export async function buildDispatchTable(squadRoot: string): Promise<DispatchTab
     readFileSafe(teamMdPath),
     readFileSafe(routingMdPath),
   ]);
+  const mergedMembers = mergeRegistryMembers(members, registryEntries);
 
   const sourceHash = createHash("sha256")
     .update(teamContent)
@@ -54,7 +86,7 @@ export async function buildDispatchTable(squadRoot: string): Promise<DispatchTab
     .digest("hex");
 
   return {
-    members: new Map(members.map((m) => [m.id, m])),
+    members: new Map(mergedMembers.map((member) => [member.id, member])),
     rules,
     parsedAt: new Date().toISOString(),
     sourceHash,

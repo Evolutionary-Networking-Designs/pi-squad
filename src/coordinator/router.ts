@@ -32,6 +32,8 @@ export interface TeamMember {
   readonly emoji: string;
   /** Optional model tier override for this agent (overrides team-level default) */
   readonly model?: string;
+  /** Optional pi-subagents built-in agent backing this Squad persona */
+  readonly piBuiltin?: string;
   /** Skill tags describing this agent's competencies */
   readonly skills: readonly string[];
 }
@@ -316,11 +318,18 @@ export class RouteDispatcher {
         const spawnResult = await spawnSquadAgent(directive, this.ctx);
         return {
           directiveType: "agent_spawn",
-          status: spawnResult.kind === "spawned" ? "spawned" : "skipped",
+          status:
+            spawnResult.kind === "spawned"
+              ? "spawned"
+              : spawnResult.kind === "reassess"
+                ? "responded"
+                : "skipped",
           message:
             spawnResult.kind === "spawned"
               ? `Spawned ${directive.agentId}`
-              : `Skipped spawn for ${directive.agentId}: ${spawnResult.reason}`,
+              : spawnResult.kind === "reassess"
+                ? spawnResult.reason
+                : `Skipped spawn for ${directive.agentId}: ${spawnResult.reason}`,
           spawn: spawnResult,
         };
       }

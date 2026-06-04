@@ -1,20 +1,24 @@
 import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
+  readdir: vi.fn(),
 }));
 
 import {
   MAX_PROMPT_CHARS,
   SquadMissingError,
+  TWO_TIER_DESCRIPTION,
+  buildWorkflowSection,
   getSystemPrompt,
 } from "../../src/coordinator/system-prompt.js";
 
 const TEAM_ROOT = "/repo";
 const readFileMock = vi.mocked(readFile);
+const readdirMock = vi.mocked(readdir);
 
 function createMissingError(filePath: string): Error & { code: string } {
   const error = new Error(`ENOENT: no such file or directory, open '${filePath}'`) as Error & {
@@ -29,13 +33,18 @@ function mockPromptFiles(options?: {
   routing?: string | null;
   decisions?: string | null;
   squadAgent?: string | null;
+  promptFiles?: Record<string, string>;
 }): void {
   const {
     team = "# Team\n\n- Saito",
     routing = "Route prompt work to Saito.",
     decisions = "# Decisions\n\n### 2026-06-01\nKeep prompts concise.",
     squadAgent = "# Squad Coordinator\n\nBase coordinator prompt.",
+    promptFiles = {},
   } = options ?? {};
+
+  // readdir returns empty list by default — workflow section is gracefully omitted
+  readdirMock.mockResolvedValue(Object.keys(promptFiles) as never);
 
   readFileMock.mockImplementation(async (filePath) => {
     const normalizedPath = String(filePath);
@@ -68,6 +77,13 @@ function mockPromptFiles(options?: {
       return decisions;
     }
 
+    // Prompt template files
+    for (const [filename, content] of Object.entries(promptFiles)) {
+      if (normalizedPath.endsWith(`/${filename}`)) {
+        return content;
+      }
+    }
+
     throw createMissingError(normalizedPath);
   });
 }
@@ -75,6 +91,7 @@ function mockPromptFiles(options?: {
 describe("getSystemPrompt", () => {
   beforeEach(() => {
     readFileMock.mockReset();
+    readdirMock.mockReset();
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
@@ -150,5 +167,99 @@ describe("getSystemPrompt", () => {
     );
 
     expect(source).toContain("Promise.all([\n    readRequiredFile(SQUAD_AGENT_MD),");
+  });
+
+  it("includes TWO_TIER_DESCRIPTION in the assembled prompt", async () => {
+    mockPromptFiles();
+
+    const prompt = await getSystemPrompt(TEAM_ROOT);
+
+    expect(prompt).toContain("## Execution Architecture");
+    expect(prompt).toContain("Team personas");
+    expect(prompt).toContain("scout");
+    expect(prompt).toContain("researcher");
+    expect(prompt).toContain("context-builder");
+  });
+
+  it("includes workflow shortcuts section when prompts directory has md files", async () => {
+    mockPromptFiles({
+      promptFiles: {
+        "parallel-review.md": "---\ndescription: Parallel subagents review\n---\nContent.",
+        "review-loop.md": "---\ndescription: Review/fix loop until clean\n---\nContent.",
+        "parallel-research.md": "---\ndescription: Parallel subagents research\n---\nContent.",
+      },
+    });
+
+    const prompt = await getSystemPrompt(TEAM_ROOT);
+
+    expect(prompt).toContain("## Workflow Shortcuts");
+    expect(prompt).toContain("parallel-review");
+    expect(prompt).toContain("Parallel subagents review");
+    expect(prompt).toContain("review-loop");
+    expect(prompt).toContain("Review/fix loop until clean");
+    expect(prompt).toContain("parallel-research");
+    expect(prompt).toContain("subagent()");
+  });
+
+  it("omits workflow shortcuts section when prompts directory is empty", async () => {
+    mockPromptFiles({ promptFiles: {} });
+
+    const prompt = await getSystemPrompt(TEAM_ROOT);
+
+    expect(prompt).not.toContain("## Workflow Shortcuts");
+  });
+});
+
+describe("TWO_TIER_DESCRIPTION", () => {
+  it("describes the persona/execution-primitive split", () => {
+    expect(TWO_TIER_DESCRIPTION).toContain("## Execution Architecture");
+    expect(TWO_TIER_DESCRIPTION).toContain("personas");
+    expect(TWO_TIER_DESCRIPTION).toContain("scout");
+    expect(TWO_TIER_DESCRIPTION).toContain("researcher");
+    expect(TWO_TIER_DESCRIPTION).toContain("context-builder");
+  });
+});
+
+describe("buildWorkflowSection", () => {
+  beforeEach(() => {
+    readFileMock.mockReset();
+    readdirMock.mockReset();
+  });
+
+  it("returns empty string when prompts directory cannot be read", async () => {
+    readdirMock.mockRejectedValue(new Error("ENOENT"));
+
+    const result = await buildWorkflowSection();
+
+    expect(result).toBe("");
+  });
+
+  it("returns empty string when directory has no md files", async () => {
+    readdirMock.mockResolvedValue([] as never);
+
+    const result = await buildWorkflowSection();
+
+    expect(result).toBe("");
+  });
+
+  it("lists workflow names and descriptions sorted alphabetically", async () => {
+    readdirMock.mockResolvedValue(["review-loop.md", "parallel-review.md"] as never);
+    readFileMock.mockImplementation(async (filePath) => {
+      const p = String(filePath);
+      if (p.endsWith("parallel-review.md"))
+        return "---\ndescription: Parallel subagents review\n---";
+      if (p.endsWith("review-loop.md")) return "---\ndescription: Review/fix loop until clean\n---";
+      throw new Error(`unexpected: ${p}`);
+    });
+
+    const result = await buildWorkflowSection();
+
+    expect(result).toContain("## Workflow Shortcuts");
+    expect(result).toContain("**parallel-review**");
+    expect(result).toContain("Parallel subagents review");
+    expect(result).toContain("**review-loop**");
+    expect(result).toContain("Review/fix loop until clean");
+    // alphabetical order: parallel-review before review-loop
+    expect(result.indexOf("parallel-review")).toBeLessThan(result.indexOf("review-loop"));
   });
 });

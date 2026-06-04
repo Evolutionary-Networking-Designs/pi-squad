@@ -3,7 +3,7 @@
  * Loads and builds the Squad coordinator system prompt.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
@@ -20,6 +20,17 @@ const TEAM_MD_FILENAME = "team.md";
 const ROUTING_MD_FILENAME = "routing.md";
 const DECISIONS_MD_FILENAME = "decisions.md";
 const SECTION_SEPARATOR = "\n\n---\n# Squad Coordinator\n\n";
+
+const PROMPTS_DIR = fileURLToPath(new URL("../../prompts", import.meta.url));
+
+export const TWO_TIER_DESCRIPTION = `## Execution Architecture
+
+Team personas (Motoko, Batou, etc.) are identity + expertise overlays. When routing work to a persona, the system spawns the appropriate pi-subagents built-in (worker, planner, reviewer, etc.) with that persona's charter as context.
+
+Available standalone execution primitives (no persona required):
+- **scout**: local-only file/code reconnaissance
+- **researcher**: external evidence acquisition
+- **context-builder**: handoff packaging (coordinator-internal)`;
 
 export const MAX_PROMPT_CHARS = 120_000;
 
@@ -75,6 +86,28 @@ function validateTeamMd(content: string): { valid: boolean; warnings: string[] }
 
 function formatSection(title: string, content: string): string {
   return `---\n## ${title}\n${content.trim()}`;
+}
+
+export async function buildWorkflowSection(): Promise<string> {
+  try {
+    const files = await readdir(PROMPTS_DIR);
+    const mdFiles = files.filter((f) => f.endsWith(".md")).sort();
+    const entries: string[] = [];
+
+    for (const file of mdFiles) {
+      const content = await readFile(join(PROMPTS_DIR, file), "utf8").catch(() => "");
+      const match = /^description:\s*(.+)$/m.exec(content);
+      const description = match ? match[1].trim() : "(no description)";
+      const name = file.replace(/\.md$/, "");
+      entries.push(`- **${name}**: ${description}`);
+    }
+
+    if (entries.length === 0) return "";
+
+    return `## Workflow Shortcuts\n\nOrchestration patterns available via \`subagent()\`:\n\n${entries.join("\n")}`;
+  } catch {
+    return "";
+  }
 }
 
 function assemblePrompt(
@@ -201,18 +234,25 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
       return null;
     });
 
-  const [squadAgent, squadVersion, team, routing, decisions] = await Promise.all([
+  const [squadAgent, squadVersion, team, routing, decisions, workflowSection] = await Promise.all([
     readRequiredFile(SQUAD_AGENT_MD),
     squadVersionPromise,
     readOptionalFile(teamPath),
     readOptionalFile(routingPath),
     readOptionalFile(decisionsPath),
+    buildWorkflowSection(),
   ]);
 
   const stampedSquadAgent = squadAgent.replace(
     /0\.0\.0-source/g,
     squadVersion ? squadVersion.trim() : "(version unknown)",
   );
+
+  const coordinatorContent = [
+    stampedSquadAgent.trim(),
+    TWO_TIER_DESCRIPTION,
+    ...(workflowSection ? [workflowSection] : []),
+  ].join("\n\n");
 
   const normalizedTeam = team?.trim() || null;
   const sanitizedTeam = normalizedTeam
@@ -228,7 +268,7 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
     : null;
   if (!sanitizedTeam) {
     console.warn("[pi-squad] Missing .squad/team.md; using minimal coordinator prompt.");
-    return stampedSquadAgent.trim();
+    return coordinatorContent;
   }
 
   const teamValidation = validateTeamMd(sanitizedTeam);
@@ -261,7 +301,7 @@ export async function getSystemPrompt(teamRoot: string): Promise<string> {
       })()
     : null;
   return enforcePromptBudget(
-    stampedSquadAgent,
+    coordinatorContent,
     sanitizedTeam,
     sanitizedRouting,
     sanitizedDecisions && sanitizedDecisions.length > 0 ? sanitizedDecisions : null,

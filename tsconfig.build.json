@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "files": [
+    "src/coordinator/coordinator.ts",
+    "src/coordinator/guard.ts",
+    "src/coordinator/router.ts",
+    "src/coordinator/spawn.ts",
+    "src/squad/agent-role-map.ts",
+    "src/squad/dispatch-builder.ts",
+    "src/squad/registry-loader.ts"
+  ],
+  "include": []
+}

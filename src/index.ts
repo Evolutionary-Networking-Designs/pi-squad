@@ -179,7 +179,11 @@ async function checkSquadUpdate(pi: ExtensionAPI): Promise<void> {
 
 function setSquadStartupUi(ctx: ExtensionContext): void {
   ctx.ui?.setWorkingMessage("Loading Squad coordinator...");
-  ctx.ui?.setStatus("pi-squad", ctx.ui.theme.fg("accent", "Squad loading"));
+  try {
+    ctx.ui?.setStatus("pi-squad", ctx.ui.theme.fg("accent", "Squad loading"));
+  } catch {
+    // Theme may not be initialized in non-interactive/SDK mode — ignore.
+  }
 }
 
 function setSquadReadyUi(ctx: ExtensionContext): void {

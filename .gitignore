@@ -1,8 +1,10 @@
 # Build output
+node_modules/
+packages/*/node_modules/
+packages/*/dist/
 dist/
 
 # Dependencies
-node_modules/
 package-lock.json
 
 # Logs

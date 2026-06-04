@@ -31,5 +31,6 @@ jobs:
 
       - name: Publish (beta, internal)
         run: npm publish --tag beta --ignore-scripts --access public
+        working-directory: packages/coordinator
         env:
           NODE_AUTH_TOKEN: ${{ secrets.INTERNAL_NPM_TOKEN }}

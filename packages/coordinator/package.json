@@ -1,0 +1,113 @@
+{
+  "name": "@pi-squad/coordinator",
+  "version": "0.2.0",
+  "description": "Squad multi-agent coordination for Pi — routes dispatches through pi-subagents' built-in executor with charter-aware system prompts",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src/**/*",
+    "squad/",
+    "agents/",
+    "skills/**/*",
+    "prompts/**/*",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "pi",
+    "pi-cli",
+    "pi-subagents",
+    "squad",
+    "multi-agent",
+    "coordinator",
+    "charter",
+    "ai",
+    "copilot",
+    "subagents"
+  ],
+  "author": "Evolutionary Networking Designs and contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evolutionary-Networking-Designs/pi-squad.git"
+  },
+  "license": "MIT",
+  "acknowledgements": [
+    {
+      "name": "Pi",
+      "author": "Mario Zechner",
+      "url": "https://github.com/earendil-works/pi",
+      "license": "MIT"
+    },
+    {
+      "name": "Squad",
+      "author": "Brady Gaster and contributors",
+      "url": "https://github.com/bradygaster/squad",
+      "license": "MIT"
+    },
+    {
+      "name": "pi-subagents",
+      "author": "Nico Bailon",
+      "url": "https://github.com/nicobailon/pi-subagents",
+      "license": "MIT"
+    },
+    {
+      "name": "rpiv-ask-user-question",
+      "author": "juicesharp",
+      "url": "https://github.com/juicesharp/rpiv-mono",
+      "license": "MIT"
+    }
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsc --noEmit --watch"
+  },
+  "squad": {
+    "version": "0.9.4",
+    "commit": "",
+    "minVersion": "0.9.0",
+    "maxVersion": "0.10.x"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@earendil-works/pi-tui": "^0.78.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@types/pg": "^8.20.0",
+    "better-sqlite3": "^12.10.0",
+    "pg": "^8.21.0",
+    "semver": "^7.6.0",
+    "sqlite-vec": "^0.1.9"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/semver": "^7.7.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "node-tmux": "^1.0.2",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.8"
+  }
+}

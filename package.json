@@ -1,7 +1,7 @@
 {
   "name": "@pi-squad/coordinator",
-  "version": "0.1.3",
-  "description": "Bring Squad's multi-agent coordination to Pi — your whole team, no cloud required",
+  "version": "0.2.0",
+  "description": "Squad multi-agent coordination for Pi — routes dispatches through pi-subagents' built-in executor with charter-aware system prompts",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
@@ -17,17 +17,19 @@
     "prompts/**/*",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE",
-    ".npmrc.example"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.0.0"
   },
   "keywords": [
     "pi",
+    "pi-cli",
+    "pi-subagents",
     "squad",
     "multi-agent",
     "coordinator",
+    "charter",
     "ai",
     "copilot",
     "subagents"

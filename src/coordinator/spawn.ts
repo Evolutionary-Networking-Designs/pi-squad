@@ -25,7 +25,7 @@ import type { AgentSpawnDirective, RouteDispatchContext } from "./router.js";
 /** Abstract model tier mapped to concrete model IDs by the auth adapter. */
 export type ModelTier = "fast" | "balanced" | "capable";
 
-/** Inline tier→model mapping. Will be extracted to src/auth/adapter.ts in a future PR. */
+/** Inline tier→model mapping. */
 const MODEL_TIERS: Record<string, Record<ModelTier, string>> = {
   copilot:   { fast: "claude-haiku-4.5",  balanced: "claude-sonnet-4.6", capable: "claude-opus-4.5"  },
   codex:     { fast: "gpt-5-mini",        balanced: "gpt-5.5",           capable: "gpt-5.3-codex"    },

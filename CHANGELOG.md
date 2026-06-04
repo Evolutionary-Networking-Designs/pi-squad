@@ -17,7 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - `squad/VERSION` never existed in upstream `bradygaster/squad` — all startup version reads were broken. Version now read from `squad/package.json` across all modules (`version.ts`, `coordinator.ts`, `system-prompt.ts`, `context/recovery.ts`)
-- `scripts/check-version.ts` pointed to non-existent `{sovereignRoot}/squad/VERSION`; fixed to read `packages/coordinator/squad/package.json`
+- `scripts/check-version.ts` pointed to non-existent `packages/coordinator/squad/VERSION`; fixed to read `packages/coordinator/squad/package.json`
 
 ### Changed
 - `scripts/sync-squad.ts` rewritten for git submodule model — replaces legacy tarball download/extract flow with `git fetch --tags` + `git checkout v{version}`
@@ -38,12 +38,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Comprehensive test suite** — `tests/` directory now wired into vitest with 69 tests across 16 files (expanded from 23 tests in v0.1.0). Full coverage of sanitizer, routing, recovery, and scribe systems.
 
 ### Fixed
-- **Squad template path resolution** — Correctly resolves Squad `.squad/` paths in both community (flat) and sovereign (monorepo) layouts, ensuring template discovery works across deployment variants
+- **Squad template path resolution** — Correctly resolves Squad `.squad/` paths in both community (flat) and monorepo layouts, ensuring template discovery works across deployment variants
 - **Regex backtracking in sanitizer** — Fixed unbounded regex in `RE_BASE64_KEY` that could cause performance issues on large payloads
 - **npm package repository URL format** — Corrected package.json URL to valid npm format for proper package registry resolution
 
 ### Changed
-- **Build configuration** — `tsconfig.json` now inlined in community repo (was referencing sovereign monorepo path)
+- **Build configuration** — `tsconfig.json` now inlined in community repo (was referencing monorepo path)
 - **CI improvements** — Added npm stage publish workflow (OIDC trusted publishing with beta tag); `package-lock.json` included for deterministic `npm ci` builds
 
 ---

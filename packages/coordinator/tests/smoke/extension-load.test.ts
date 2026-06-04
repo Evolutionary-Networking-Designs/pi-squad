@@ -12,8 +12,8 @@ import {
 } from "../helpers/tmux.js";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(TEST_DIR, "../../../..");
-const WORKSPACE_EXTENSION = resolve(REPO_ROOT, "packages/coordinator/src/index.ts");
+const REPO_ROOT = resolve(TEST_DIR, "../../../../..");
+const WORKSPACE_EXTENSION = resolve(REPO_ROOT, "community/packages/coordinator/src/index.ts");
 const PI_EXTENSION_ARGS = [
   "--no-extensions",
   "--extension",

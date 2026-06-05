@@ -1,0 +1,48 @@
+{
+  "name": "@pi-squad/pi-web-plugin",
+  "version": "0.1.0",
+  "private": false,
+  "description": "PI WEB plugin for viewing pi-squad workspace state",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src/**/*",
+    "pi-web-plugin.js",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "echo 'No tests yet — PISQUAD_WEB_SMOKE=1 gate pending'"
+  },
+  "keywords": [
+    "pi",
+    "pi-web",
+    "squad",
+    "pi-extension"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "@jmfederico/pi-web": ">=1.202606.0 <2"
+  },
+  "devDependencies": {
+    "@jmfederico/pi-web": "^1.202606.0",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.4.0"
+  },
+  "piWeb": {
+    "plugins": [
+      {
+        "id": "pi-squad",
+        "module": "pi-web-plugin.js"
+      }
+    ]
+  }
+}

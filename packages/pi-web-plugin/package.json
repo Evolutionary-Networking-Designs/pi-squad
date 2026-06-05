@@ -2,7 +2,7 @@
   "name": "@pi-squad/pi-web-plugin",
   "version": "0.1.0",
   "private": false,
-  "description": "PI WEB plugin for viewing pi-squad workspace state",
+  "description": "PI WEB plugin for pi-squad workspace state",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {

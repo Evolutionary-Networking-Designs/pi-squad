@@ -18,7 +18,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "echo 'No tests yet — PISQUAD_WEB_SMOKE=1 gate pending'"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "PISQUAD_WEB_SMOKE=1 vitest run"
   },
   "keywords": [
     "pi",
@@ -35,7 +37,9 @@
   "devDependencies": {
     "@jmfederico/pi-web": "^1.202606.0",
     "@types/node": "^24.10.1",
-    "typescript": "^5.4.0"
+    "@vitest/coverage-v8": "4.1.8",
+    "typescript": "^5.4.0",
+    "vitest": "4.1.8"
   },
   "piWeb": {
     "plugins": [

@@ -33,13 +33,10 @@ Then reload the PI WEB browser tab.
 npm run build -w packages/pi-web-plugin
 npm run dev -w packages/pi-web-plugin
 npm run test -w packages/pi-web-plugin
+PISQUAD_WEB_SMOKE=1 npm run test -w packages/pi-web-plugin
 ```
 
-`npm run test` is currently a placeholder. Proto's browser smoke gate is planned under:
-
-```bash
-PISQUAD_WEB_SMOKE=1
-```
+`createSquadReader()` is the primary test seam. Standard runs execute co-located `src/**/*.test.ts` tests only. The in-memory smoke harness lives in `tests/squad-reader.smoke.ts` and runs when `PISQUAD_WEB_SMOKE=1` is set.
 
 ## Troubleshooting
 
